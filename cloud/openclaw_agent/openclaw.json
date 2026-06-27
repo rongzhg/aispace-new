@@ -1,0 +1,29 @@
+{
+  "agents": {
+    "defaults": {
+      "model": { "primary": "qwen-compatible/qwen-plus" },
+      "models": { "qwen-compatible/qwen-plus": { "alias": "qwen" } }
+    }
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "qwen-compatible": {
+        "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "apiKey": "${DASHSCOPE_API_KEY}",
+        "api": "openai-completions",
+        "timeoutSeconds": 300,
+        "models": [
+          {
+            "id": "qwen-plus",
+            "name": "Qwen Plus",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 200000,
+            "maxTokens": 8192
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AISpace · Agent 管理平台</title>
+<style>
+  :root { --c-primary: #4F46E5; }
+  * { box-sizing: border-box; }
+  html,body { margin:0; height:100%; }
+  body { font-family: -apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,Inter,sans-serif; background:#fff; color:#17171C; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  #boot { display:flex; height:100vh; align-items:center; justify-content:center; color:#8A8C99; font-size:13px; letter-spacing:0.2px; }
+  pre { margin:0; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb { background:#E4E4EA; border-radius:6px; border:3px solid #fff; }
+  ::-webkit-scrollbar-thumb:hover { background:#D4D4DC; }
+  .agent-card { transition: box-shadow .16s ease, border-color .16s ease, transform .16s ease; }
+  .agent-card:hover { border-color:#C9CAD6; box-shadow:0 1px 2px rgba(20,20,45,0.06); }
+  .agent-card:active { transform: translateY(0.5px); }
+</style>
+<script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/dayjs@1.11.13/dayjs.min.js"></script>
+<script src="https://unpkg.com/antd@5.21.6/dist/antd.min.js"></script>
+<script src="https://unpkg.com/@ant-design/icons@5.5.2/dist/index.umd.min.js"></script>
+</head>
+<body>
+<div id="root"><div id="boot">正在加载 AISpace…（首次需联网加载组件库）</div></div>
+<script>

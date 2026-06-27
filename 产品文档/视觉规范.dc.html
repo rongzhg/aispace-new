@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  body { margin:0; background:#FAFAFB; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  * { box-sizing:border-box; }
+</style>
+</helmet>
+
+<div style="font-family:-apple-system,'PingFang SC','Microsoft YaHei',Segoe UI,Inter,sans-serif; color:#17171C; background:#FAFAFB; min-height:100vh; padding:48px 24px 80px;">
+<div style="max-width:1040px; margin:0 auto;">
+
+  <!-- ===== COVER ===== -->
+  <div style="display:flex; align-items:center; gap:16px; margin-bottom:14px;">
+    <div style="width:46px; height:46px; border-radius:11px; background:linear-gradient(135deg,#4F46E5,#7A72ED); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:22px; box-shadow:0 2px 7px rgba(79,70,229,0.32);">A</div>
+    <div style="line-height:1.2;">
+      <div style="font-weight:750; font-size:19px; letter-spacing:-0.2px;">AISpace · Agent 平台</div>
+      <div style="font-size:12.5px; color:#8A8C99; font-weight:600; letter-spacing:0.3px;">VISUAL SPECIFICATION</div>
+    </div>
+  </div>
+  <h1 style="margin:0 0 10px; font-size:38px; font-weight:750; letter-spacing:-1px; line-height:1.1;">视觉规范</h1>
+  <p style="margin:0 0 22px; font-size:15px; line-height:1.7; color:#5A5C6B; max-width:680px; text-wrap:pretty;">本规范是多人并行开发的统一视觉契约。所有页面、组件与新功能必须遵循此处定义的色彩、排版、间距、圆角与组件样式，确保产品在不同模块间保持一致的「工具化、高密度、克制」气质。</p>
+  <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:34px;">
+    <span style="font-size:12px; font-weight:600; color:#5A5C6B; background:#fff; border:1px solid #EBEBF1; border-radius:6px; padding:5px 11px;">01 设计原则</span>
+    <span style="font-size:12px; font-weight:600; color:#5A5C6B; background:#fff; border:1px solid #EBEBF1; border-radius:6px; padding:5px 11px;">02 色彩</span>
+    <span style="font-size:12px; font-weight:600; color:#5A5C6B; background:#fff; border:1px solid #EBEBF1; border-radius:6px; padding:5px 11px;">03 字体排版</span>
+    <span style="font-size:12px; font-weight:600; color:#5A5C6B; background:#fff; border:1px solid #EBEBF1; border-radius:6px; padding:5px 11px;">04 间距与布局</span>
+    <span style="font-size:12px; font-weight:600; color:#5A5C6B; background:#fff; border:1px solid #EBEBF1; border-radius:6px; padding:5px 11px;">05 圆角·描边·投影</span>
+    <span style="font-size:12px; font-weight:600; color:#5A5C6B; background:#fff; border:1px solid #EBEBF1; border-radius:6px; padding:5px 11px;">06 组件</span>
+    <span style="font-size:12px; font-weight:600; color:#5A5C6B; background:#fff; border:1px solid #EBEBF1; border-radius:6px; padding:5px 11px;">07 图标</span>
+    <span style="font-size:12px; font-weight:600; color:#5A5C6B; background:#fff; border:1px solid #EBEBF1; border-radius:6px; padding:5px 11px;">08 Do &amp; Don't</span>
+  </div>
+
+  <!-- ===== 01 PRINCIPLES ===== -->
+  <section style="background:#fff; border:1px solid #EBEBF1; border-radius:8px; padding:30px 32px; margin-bottom:18px;">
+    <div style="font-size:11px; font-weight:600; letter-spacing:0.8px; color:#A6A8B4;">01 — PRINCIPLES</div>
+    <h2 style="margin:6px 0 4px; font-size:20px; font-weight:750; letter-spacing:-0.3px;">设计原则</h2>
+    <p style="margin:0 0 22px; font-size:13.5px; color:#8A8C99;">这是一个开发者使用的工具平台，不是消费级产品。四条原则统领所有取舍。</p>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px 20px;">
+        <div style="font-size:14.5px; font-weight:650; margin-bottom:6px;">高密度</div>
+        <div style="font-size:13px; line-height:1.65; color:#5A5C6B;">紧凑的行高与内边距，让一屏承载更多信息。留白服务于分组，而非装饰。</div>
+      </div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px 20px;">
+        <div style="font-size:14.5px; font-weight:650; margin-bottom:6px;">硬朗边界</div>
+        <div style="font-size:13px; line-height:1.65; color:#5A5C6B;">小圆角（6–8px）、1px 发丝描边。用边界而非柔和阴影来界定结构，传达精确与可控。</div>
+      </div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px 20px;">
+        <div style="font-size:14.5px; font-weight:650; margin-bottom:6px;">克制配色</div>
+        <div style="font-size:13px; line-height:1.65; color:#5A5C6B;">中性灰白为主，靛蓝仅用于强调与可点击对象。语义色只在状态表达时出现。</div>
+      </div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px 20px;">
+        <div style="font-size:14.5px; font-weight:650; margin-bottom:6px;">层级清晰</div>
+        <div style="font-size:13px; line-height:1.65; color:#5A5C6B;">用字重与文本灰阶建立层级，而非字号膨胀。正文 14px，标题克制。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 02 COLOR ===== -->
+  <section style="background:#fff; border:1px solid #EBEBF1; border-radius:8px; padding:30px 32px; margin-bottom:18px;">
+    <div style="font-size:11px; font-weight:600; letter-spacing:0.8px; color:#A6A8B4;">02 — COLOR</div>
+    <h2 style="margin:6px 0 4px; font-size:20px; font-weight:750; letter-spacing:-0.3px;">色彩</h2>
+    <p style="margin:0 0 22px; font-size:13.5px; color:#8A8C99;">所有取色必须来自下表。十六进制为唯一真实来源，禁止凭感觉新造颜色。</p>
+
+    <div style="font-size:12px; font-weight:700; color:#33333C; letter-spacing:0.3px; margin:0 0 12px;">品牌强调色 · Indigo</div>
+    <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:26px;">
+      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#4F46E5;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#4F46E5</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">主色 · 链接/选中</div></div></div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#6E66EA;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#6E66EA</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">Hover</div></div></div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#7A72ED;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#7A72ED</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">渐变末端</div></div></div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#EEF0FF;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#EEF0FF</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">强调浅底 · 标签</div></div></div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#DCDFFF;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#DCDFFF</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">强调描边</div></div></div>
+    </div>
+
+    <div style="font-size:12px; font-weight:700; color:#33333C; letter-spacing:0.3px; margin:0 0 12px;">主操作墨色 &amp; 文本</div>
+    <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:26px;">
+      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#17171C;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#17171C</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">墨色 · 主按钮/一级文本</div></div></div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#5A5C6B;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#5A5C6B</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">二级文本</div></div></div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#8A8C99;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#8A8C99</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">三级文本</div></div></div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#A6A8B4;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#A6A8B4</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">占位 · 元信息</div></div></div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#4A4A55;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#4A4A55</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">技能标签文字</div></div></div>
+    </div>
+
+    <div style="font-size:12px; font-weight:700; color:#33333C; letter-spacing:0.3px; margin:0 0 12px;">描边 &amp; 表面</div>
+    <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:26px;">
+      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#E7E7EC;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#E7E7EC</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">控件描边</div></div></div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#EBEBF1;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#EBEBF1</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">卡片描边</div></div></div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#F1F1F5;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#F1F1F5</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">分隔线 · 发丝</div></div></div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#FAFAFB;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#FAFAFB</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">下沉面 · 侧栏/表头</div></div></div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#FFFFFF; box-shadow:inset 0 0 0 1px #F1F1F5;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#FFFFFF</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">基础面</div></div></div>
+    </div>
+
+    <div style="font-size:12px; font-weight:700; color:#33333C; letter-spacing:0.3px; margin:0 0 12px;">语义色 · 仅用于状态</div>
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px;">
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:16px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;"><span style="width:10px; height:10px; border-radius:50%; background:#34C759;"></span><span style="font-size:13px; font-weight:650;">成功 Success</span></div>
+        <div style="background:#EAF8F0; color:#1E8449; border-radius:6px; padding:7px 10px; font-size:12.5px; font-weight:600;">已连接 · 配置生效</div>
+        <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8A8C99; margin-top:9px;">文字#1E8449 / 底#EAF8F0 / 点#34C759</div>
+      </div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:16px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;"><span style="width:10px; height:10px; border-radius:50%; background:#E6A817;"></span><span style="font-size:13px; font-weight:650;">警告 Warning</span></div>
+        <div style="background:#FFF8E6; color:#946C00; border:1px solid #FCE2A0; border-radius:6px; padding:6px 10px; font-size:12.5px; font-weight:600;">正在查看历史版本</div>
+        <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8A8C99; margin-top:9px;">文字#946C00 / 底#FFF8E6 / 边#FCE2A0</div>
+      </div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:16px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;"><span style="width:10px; height:10px; border-radius:50%; background:#E5484D;"></span><span style="font-size:13px; font-weight:650;">危险 Danger</span></div>
+        <div style="background:#FDECEC; color:#C0392B; border-radius:6px; padding:7px 10px; font-size:12.5px; font-weight:600;">删除该 Agent</div>
+        <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8A8C99; margin-top:9px;">主#E5484D / 文字#C0392B / 底#FDECEC</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 03 TYPOGRAPHY ===== -->
+  <section style="background:#fff; border:1px solid #EBEBF1; border-radius:8px; padding:30px 32px; margin-bottom:18px;">
+    <div style="font-size:11px; font-weight:600; letter-spacing:0.8px; color:#A6A8B4;">03 — TYPOGRAPHY</div>
+    <h2 style="margin:6px 0 4px; font-size:20px; font-weight:750; letter-spacing:-0.3px;">字体排版</h2>
+    <p style="margin:0 0 22px; font-size:13.5px; color:#8A8C99;">系统字体栈，无需加载外部字库。层级靠字重与灰阶，不靠字号膨胀。</p>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:24px;">
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:16px 18px;">
+        <div style="font-size:11px; color:#A6A8B4; font-weight:600; margin-bottom:6px;">界面字体 · UI</div>
+        <div style="font-size:15px; font-weight:600;">-apple-system, "PingFang SC",</div>
+        <div style="font-size:15px; font-weight:600;">"Microsoft YaHei", Segoe UI, Inter</div>
+      </div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:16px 18px;">
+        <div style="font-size:11px; color:#A6A8B4; font-weight:600; margin-bottom:6px;">等宽字体 · Mono</div>
+        <div style="font-family:ui-monospace,Menlo,monospace; font-size:14px; font-weight:600;">ui-monospace, SFMono-Regular,</div>
+        <div style="font-family:ui-monospace,Menlo,monospace; font-size:14px; font-weight:600;">Menlo, monospace</div>
+        <div style="font-size:11.5px; color:#8A8C99; margin-top:4px;">用于模型名、参数、代码、版本号</div>
+      </div>
+    </div>
+
+    <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #F1F1F5;"><span style="font-size:20px; font-weight:750; letter-spacing:-0.3px;">页面标题 Agents</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#8A8C99;">20px / 750</span></div>
+      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #F1F1F5;"><span style="font-size:17px; font-weight:700;">详情标题 / 模块名</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#8A8C99;">17px / 700</span></div>
+      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #F1F1F5;"><span style="font-size:14.5px; font-weight:650;">卡片标题 · 需求分析助手</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#8A8C99;">14.5px / 650</span></div>
+      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #F1F1F5;"><span style="font-size:13px; font-weight:600;">区块标题 · 配置文件</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#8A8C99;">13px / 600</span></div>
+      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #F1F1F5;"><span style="font-size:14px; font-weight:400;">正文 Body · 默认文本与按钮文字</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#8A8C99;">14px / 400 · base</span></div>
+      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #F1F1F5;"><span style="font-size:13.5px; font-weight:400; color:#5A5C6B;">次要正文 · 描述与说明</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#8A8C99;">13.5px / 400</span></div>
+      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #F1F1F5;"><span style="font-size:12px; font-weight:400; color:#8A8C99;">元信息 · 时间戳 / 计数</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#8A8C99;">12px / 400</span></div>
+      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:14px 18px;"><span style="font-size:10.5px; font-weight:600; color:#A6A8B4; letter-spacing:0.6px;">导航分组标签 · 工作空间</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#8A8C99;">10.5px / 600 · +0.6</span></div>
+    </div>
+
+    <div style="display:flex; gap:8px; margin-top:18px; flex-wrap:wrap;">
+      <span style="font-size:12px; color:#5A5C6B;">字重梯度：</span>
+      <span style="font-size:13px; font-weight:400;">400 常规</span><span style="color:#D0D0D8;">·</span>
+      <span style="font-size:13px; font-weight:500;">500 按钮</span><span style="color:#D0D0D8;">·</span>
+      <span style="font-size:13px; font-weight:600;">600 半粗</span><span style="color:#D0D0D8;">·</span>
+      <span style="font-size:13px; font-weight:650;">650 标题</span><span style="color:#D0D0D8;">·</span>
+      <span style="font-size:13px; font-weight:700;">700 强调</span><span style="color:#D0D0D8;">·</span>
+      <span style="font-size:13px; font-weight:750;">750 展示</span>
+    </div>
+  </section>
+
+  <!-- ===== 04 SPACING & LAYOUT ===== -->
+  <section style="background:#fff; border:1px solid #EBEBF1; border-radius:8px; padding:30px 32px; margin-bottom:18px;">
+    <div style="font-size:11px; font-weight:600; letter-spacing:0.8px; color:#A6A8B4;">04 — SPACING &amp; LAYOUT</div>
+    <h2 style="margin:6px 0 4px; font-size:20px; font-weight:750; letter-spacing:-0.3px;">间距与布局</h2>
+    <p style="margin:0 0 22px; font-size:13.5px; color:#8A8C99;">基础步进 4px。密度优先——行内边距与间距偏紧，留白用于分组。</p>
+
+    <div style="font-size:12px; font-weight:700; color:#33333C; margin:0 0 12px;">间距步进</div>
+    <div style="display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap; margin-bottom:26px;">
+      <div style="text-align:center;"><div style="width:6px; height:6px; background:#4F46E5; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">6</div></div>
+      <div style="text-align:center;"><div style="width:8px; height:8px; background:#4F46E5; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">8</div></div>
+      <div style="text-align:center;"><div style="width:10px; height:10px; background:#4F46E5; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">10</div></div>
+      <div style="text-align:center;"><div style="width:12px; height:12px; background:#4F46E5; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">12</div></div>
+      <div style="text-align:center;"><div style="width:14px; height:14px; background:#6E66EA; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">14</div></div>
+      <div style="text-align:center;"><div style="width:16px; height:16px; background:#6E66EA; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">16</div></div>
+      <div style="text-align:center;"><div style="width:20px; height:20px; background:#7A72ED; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">20</div></div>
+      <div style="text-align:center;"><div style="width:24px; height:24px; background:#7A72ED; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">24</div></div>
+      <div style="text-align:center;"><div style="width:28px; height:28px; background:#A9A4F2; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">28</div></div>
+      <div style="text-align:center;"><div style="width:32px; height:32px; background:#A9A4F2; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">32</div></div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px 20px;">
+        <div style="font-size:13px; font-weight:650; margin-bottom:12px;">关键布局尺寸</div>
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">侧边栏宽度</span><span style="font-family:ui-monospace,Menlo,monospace;">236px</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">顶栏高度</span><span style="font-family:ui-monospace,Menlo,monospace;">56px</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">内容区最大宽</span><span style="font-family:ui-monospace,Menlo,monospace;">1240px</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">内容区内边距</span><span style="font-family:ui-monospace,Menlo,monospace;">20 / 28 / 36</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0;"><span style="color:#5A5C6B;">控件高度</span><span style="font-family:ui-monospace,Menlo,monospace;">34px</span></div>
+      </div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px 20px;">
+        <div style="font-size:13px; font-weight:650; margin-bottom:12px;">密度基准</div>
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">列表行内边距</span><span style="font-family:ui-monospace,Menlo,monospace;">9px 14px</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">列表行间距</span><span style="font-family:ui-monospace,Menlo,monospace;">6px</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">表格单元竖向内边距</span><span style="font-family:ui-monospace,Menlo,monospace;">9px</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">面板内边距</span><span style="font-family:ui-monospace,Menlo,monospace;">20–24px</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0;"><span style="color:#5A5C6B;">按钮横向内边距</span><span style="font-family:ui-monospace,Menlo,monospace;">16px</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 05 RADIUS / BORDER / ELEVATION ===== -->
+  <section style="background:#fff; border:1px solid #EBEBF1; border-radius:8px; padding:30px 32px; margin-bottom:18px;">
+    <div style="font-size:11px; font-weight:600; letter-spacing:0.8px; color:#A6A8B4;">05 — RADIUS · BORDER · ELEVATION</div>
+    <h2 style="margin:6px 0 4px; font-size:20px; font-weight:750; letter-spacing:-0.3px;">圆角 · 描边 · 投影</h2>
+    <p style="margin:0 0 22px; font-size:13.5px; color:#8A8C99;">硬朗、克制。优先用 1px 描边界定结构，阴影仅作轻微的悬浮反馈。</p>
+
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px;">
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:16px; text-align:center;"><div style="width:54px; height:54px; background:#EEF0FF; border:1px solid #DCDFFF; border-radius:6px; margin:0 auto 10px;"></div><div style="font-size:12.5px; font-weight:650;">6px</div><div style="font-size:11.5px; color:#8A8C99;">控件 · 标签 · 代码块</div></div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:16px; text-align:center;"><div style="width:54px; height:54px; background:#EEF0FF; border:1px solid #DCDFFF; border-radius:8px; margin:0 auto 10px;"></div><div style="font-size:12.5px; font-weight:650;">8px</div><div style="font-size:11.5px; color:#8A8C99;">卡片 · 面板</div></div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:16px; text-align:center;"><div style="width:54px; height:54px; background:#EEF0FF; border:1px solid #DCDFFF; border-radius:6px; margin:0 auto 10px;"></div><div style="font-size:12.5px; font-weight:650;">6px</div><div style="font-size:11.5px; color:#8A8C99;">图标容器</div></div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:16px; text-align:center;"><div style="width:54px; height:54px; background:#4F46E5; border-radius:50%; margin:0 auto 10px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:600;">H</div><div style="font-size:12.5px; font-weight:650;">50%</div><div style="font-size:11.5px; color:#8A8C99;">头像</div></div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px;">
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px;">
+        <div style="font-size:13px; font-weight:650; margin-bottom:14px;">静止 Rest</div>
+        <div style="height:46px; background:#fff; border:1px solid #EBEBF1; border-radius:8px;"></div>
+        <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8A8C99; margin-top:10px;">1px #EBEBF1 · 无阴影</div>
+      </div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px;">
+        <div style="font-size:13px; font-weight:650; margin-bottom:14px;">悬浮 Hover</div>
+        <div style="height:46px; background:#fff; border:1px solid #C9CAD6; border-radius:8px; box-shadow:0 1px 2px rgba(20,20,45,0.06);"></div>
+        <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8A8C99; margin-top:10px;">边#C9CAD6 · 0 1px 2px /.06</div>
+      </div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px;">
+        <div style="font-size:13px; font-weight:650; margin-bottom:14px;">聚焦环 Focus</div>
+        <div style="height:46px; background:#fff; border:1px solid #4F46E5; border-radius:8px; box-shadow:0 0 0 3px rgba(79,70,229,0.10);"></div>
+        <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8A8C99; margin-top:10px;">3px rgba(79,70,229,.10)</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 06 COMPONENTS ===== -->
+  <section style="background:#fff; border:1px solid #EBEBF1; border-radius:8px; padding:30px 32px; margin-bottom:18px;">
+    <div style="font-size:11px; font-weight:600; letter-spacing:0.8px; color:#A6A8B4;">06 — COMPONENTS</div>
+    <h2 style="margin:6px 0 4px; font-size:20px; font-weight:750; letter-spacing:-0.3px;">组件</h2>
+    <p style="margin:0 0 22px; font-size:13.5px; color:#8A8C99;">基于 Ant Design 5，按下列样式覆写。所有控件高度 34px、圆角 6px。</p>
+
+    <!-- buttons -->
+    <div style="font-size:12px; font-weight:700; color:#33333C; margin:0 0 12px;">按钮 Button</div>
+    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px;">
+      <span style="height:34px; display:inline-flex; align-items:center; padding:0 16px; background:#17171C; color:#fff; border-radius:6px; font-size:14px; font-weight:500;">主操作 Primary</span>
+      <span style="height:34px; display:inline-flex; align-items:center; padding:0 16px; background:#fff; color:#17171C; border:1px solid #E7E7EC; border-radius:6px; font-size:14px; font-weight:500;">默认 Default</span>
+      <span style="height:34px; display:inline-flex; align-items:center; padding:0 12px; background:transparent; color:#4F46E5; border-radius:6px; font-size:14px; font-weight:500;">文字 Text</span>
+      <span style="height:34px; display:inline-flex; align-items:center; padding:0 14px; background:#fff; color:#5A5C6B; border:1px dashed #D0D0D8; border-radius:6px; font-size:14px; font-weight:500;">+ 虚线 Dashed</span>
+      <span style="height:34px; display:inline-flex; align-items:center; padding:0 12px; background:transparent; color:#E5484D; border-radius:6px; font-size:14px; font-weight:500;">删除 Danger</span>
+      <span style="height:34px; display:inline-flex; align-items:center; padding:0 16px; background:#F4F4F7; color:#BBBCC6; border-radius:6px; font-size:14px; font-weight:500;">禁用 Disabled</span>
+    </div>
+    <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8A8C99; margin-bottom:26px;">主按钮 = 墨色 #17171C 实底 · 无投影 · colorPrimary 即墨色，强调靛蓝只走链接/选中</div>
+
+    <!-- tags / pills -->
+    <div style="font-size:12px; font-weight:700; color:#33333C; margin:0 0 12px;">标签与药丸 Tag · Pill · Chip</div>
+    <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px;">
+      <span style="background:#EEF0FF; color:#4F46E5; font-size:11px; padding:2px 8px; border-radius:6px; font-weight:600;">Claude Code</span>
+      <span style="background:#F1F1F4; color:#5A5C6B; font-size:11px; padding:2px 8px; border-radius:6px; font-weight:600;">v2</span>
+      <span style="background:#EEF0FF; color:#4F46E5; font-size:12px; padding:3px 10px; border-radius:6px; font-weight:500;">web_search ×</span>
+      <span style="background:#F1F1F4; color:#4A4A55; font-size:12px; padding:3px 10px; border-radius:6px; font-weight:500;">需求分析 ×</span>
+      <span style="font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:#5A5C6B; background:#FAFAFB; border:1px solid #F1F1F5; border-radius:6px; padding:3px 8px;">claude-sonnet-4-6</span>
+    </div>
+    <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8A8C99; margin-bottom:26px;">强调药丸 #EEF0FF/#4F46E5 · 中性药丸 #F1F1F4/#5A5C6B · 模型码片 = 等宽 + 下沉底</div>
+
+    <!-- inputs -->
+    <div style="font-size:12px; font-weight:700; color:#33333C; margin:0 0 12px;">输入控件 Input · Select · Segmented</div>
+    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:26px;">
+      <span style="height:34px; width:240px; display:inline-flex; align-items:center; gap:8px; padding:0 12px; background:#fff; border:1px solid #E7E7EC; border-radius:6px; font-size:13.5px; color:#A6A8B4;">⌕ 搜索 Agent 名称</span>
+      <span style="height:34px; display:inline-flex; align-items:center; justify-content:space-between; gap:24px; padding:0 12px; background:#fff; border:1px solid #E7E7EC; border-radius:6px; font-size:13.5px; color:#17171C;">最近编辑 <span style="color:#A6A8B4; font-size:10px;">▾</span></span>
+      <span style="display:inline-flex; background:#F1F1F4; border-radius:6px; padding:3px;"><span style="background:#fff; color:#17171C; font-size:13px; padding:4px 14px; border-radius:5px; font-weight:500;">JSON</span><span style="color:#5B5D6B; font-size:13px; padding:4px 14px;">YAML</span></span>
+    </div>
+
+    <!-- callouts -->
+    <div style="font-size:12px; font-weight:700; color:#33333C; margin:0 0 12px;">提示条 Callout</div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:26px;">
+      <div style="background:#EEF0FF; border:1px solid #DCDFFF; border-radius:8px; padding:10px 14px; font-size:13px; color:#4F46E5;">正在查看最新版本 v2</div>
+      <div style="background:#FFF8E6; border:1px solid #FCE2A0; border-radius:8px; padding:10px 14px; font-size:13px; color:#946C00;">正在只读查看历史版本；编辑将基于该版本生成新版本。</div>
+    </div>
+
+    <!-- agent row card -->
+    <div style="font-size:12px; font-weight:700; color:#33333C; margin:0 0 12px;">列表行卡片 Row Card · 高密度</div>
+    <div style="display:flex; align-items:center; gap:12px; padding:9px 14px; background:#fff; border:1px solid #EBEBF1; border-radius:8px; margin-bottom:10px;">
+      <div style="width:32px; height:32px; border-radius:6px; background:#EEF0FF; display:flex; align-items:center; justify-content:center; flex-shrink:0; color:#4F46E5; font-size:16px;">◆</div>
+      <div style="flex:1; min-width:0;">
+        <div style="display:flex; align-items:center; gap:8px;"><span style="font-weight:650; font-size:14.5px; color:#17171C;">需求分析助手</span><span style="background:#F1F1F4; color:#5A5C6B; font-size:11px; padding:2px 8px; border-radius:6px; font-weight:600;">v2</span></div>
+        <div style="color:#8A8C99; font-size:12.5px; margin-top:3px;">把用户对话整理成结构化需求</div>
+      </div>
+      <span style="background:#EEF0FF; color:#4F46E5; font-size:11px; padding:2px 8px; border-radius:6px; font-weight:600;">Claude Code</span>
+      <span style="font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:#5A5C6B; background:#FAFAFB; border:1px solid #F1F1F5; border-radius:6px; padding:3px 8px;">claude-sonnet-4-6</span>
+      <span style="color:#A6A8B4; font-size:12px;">06-24 17:04</span>
+    </div>
+    <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8A8C99;">行高紧凑 · 1px #EBEBF1 描边 · 8px 圆角 · 悬浮仅加 1px 软阴影</div>
+  </section>
+
+  <!-- ===== 07 ICONOGRAPHY ===== -->
+  <section style="background:#fff; border:1px solid #EBEBF1; border-radius:8px; padding:30px 32px; margin-bottom:18px;">
+    <div style="font-size:11px; font-weight:600; letter-spacing:0.8px; color:#A6A8B4;">07 — ICONOGRAPHY</div>
+    <h2 style="margin:6px 0 4px; font-size:20px; font-weight:750; letter-spacing:-0.3px;">图标</h2>
+    <p style="margin:0 0 20px; font-size:13.5px; color:#8A8C99;">统一使用 <span style="font-family:ui-monospace,Menlo,monospace;">@ant-design/icons</span> 线性图标。不混用其它图标库，不使用 emoji。</p>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px 20px;">
+        <div style="font-size:13px; font-weight:650; margin-bottom:10px;">尺寸</div>
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">导航 / 菜单</span><span style="font-family:ui-monospace,Menlo,monospace;">16px</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">行内 / 按钮</span><span style="font-family:ui-monospace,Menlo,monospace;">14px</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0;"><span style="color:#5A5C6B;">列表图标容器内</span><span style="font-family:ui-monospace,Menlo,monospace;">16–17px</span></div>
+      </div>
+      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px 20px;">
+        <div style="font-size:13px; font-weight:650; margin-bottom:10px;">颜色</div>
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">默认 / 次要</span><span style="font-family:ui-monospace,Menlo,monospace;">#8A8C99</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">强调 / 激活</span><span style="font-family:ui-monospace,Menlo,monospace;">#4F46E5</span></div>
+        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0;"><span style="color:#5A5C6B;">危险</span><span style="font-family:ui-monospace,Menlo,monospace;">#E5484D</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== 08 DO & DON'T ===== -->
+  <section style="background:#fff; border:1px solid #EBEBF1; border-radius:8px; padding:30px 32px; margin-bottom:18px;">
+    <div style="font-size:11px; font-weight:600; letter-spacing:0.8px; color:#A6A8B4;">08 — DO &amp; DON'T</div>
+    <h2 style="margin:6px 0 4px; font-size:20px; font-weight:750; letter-spacing:-0.3px;">该做 / 不该做</h2>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:18px;">
+      <div style="border:1px solid #D6EFDF; background:#F6FCF8; border-radius:8px; padding:18px 20px;">
+        <div style="font-size:13px; font-weight:700; color:#1E8449; margin-bottom:12px;">✓ 该做</div>
+        <div style="font-size:13px; line-height:1.85; color:#33333C;">
+          紧凑行高，一屏多信息<br>
+          6–8px 小圆角，硬朗发丝描边<br>
+          靛蓝只用于强调与可点击对象<br>
+          层级靠字重与灰阶，不靠字号<br>
+          模型名 / 参数 / 代码用等宽字体
+        </div>
+      </div>
+      <div style="border:1px solid #F6D9DA; background:#FDF7F7; border-radius:8px; padding:18px 20px;">
+        <div style="font-size:13px; font-weight:700; color:#C0392B; margin-bottom:12px;">✕ 不该做</div>
+        <div style="font-size:13px; line-height:1.85; color:#33333C;">
+          大圆角（≥12px）与大柔阴影<br>
+          凭感觉新造色值或渐变<br>
+          宽松留白、营销式大标题<br>
+          彩色滥用、强调色铺大面积<br>
+          混用其它图标库或 emoji
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div style="text-align:center; font-size:12px; color:#A6A8B4; padding:14px 0 0;">AISpace · Agent 平台 · 视觉规范 v1 — 本文件由当前 index.html 提炼，任何 token 变更须同步更新本规范</div>
+
+</div>
+</div>
+</x-dc>
+</body>
+</html>

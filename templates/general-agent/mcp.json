@@ -1,0 +1,10 @@
+{
+  "_说明": "把本文件复制成 .mcp.json 放到通用助手工作目录（与 CLAUDE.md 同级），并把 args 改成 mcp_server.py 的绝对路径。或用 `claude mcp add`。",
+  "mcpServers": {
+    "aispace": {
+      "command": "python3",
+      "args": ["/Users/rongzhang/Claude/Projects/aispace-new/backend/mcp_server.py"],
+      "env": { "AISPACE_API": "http://localhost:8000" }
+    }
+  }
+}

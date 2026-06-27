@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(openclaw --version)",
+      "Bash(openclaw --help)",
+      "Read(//Users/rongzhang/.npm-global/**)",
+      "Bash(npm ls *)"
+    ]
+  }
+}
