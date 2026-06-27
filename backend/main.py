@@ -1111,7 +1111,7 @@ def service_chat_stream(aid: str, body: ChatIn):
             except Exception as e:
                 yield f"event: error\ndata: {json.dumps({'reply': str(e)}, ensure_ascii=False)}\n\n"
                 return
-            yield f"event: delta\ndata: {json.dumps({'text': r.get('reply', '')}, ensure_ascii=False)}\n\n"
+            yield from _sse_text_deltas(r.get("reply", ""))   # 逐字推送，与本地一致的流式观感
             yield f"event: done\ndata: {json.dumps(r, ensure_ascii=False)}\n\n"
         return StreamingResponse(gen_cloud(), media_type="text/event-stream")
     payload = _svc_payload(aid, svc, body)
@@ -1301,6 +1301,15 @@ def _session_downstream(user, agent_ref, ws, message, resume_token):
     return svc, payload
 
 
+def _sse_text_deltas(text, size=2, delay=0.012):
+    """把一次性文本切成小块按 SSE delta 推送，给云端/一次性结果一个与本地一致的「逐字流式」观感。
+    云端 bundle 当前是一次性 /chat（CLI 缓冲全量输出），没有 token 流；本地 OpenClaw Gateway 同样按字切。"""
+    for i in range(0, len(text), size):
+        yield f"event: delta\ndata: {json.dumps({'text': text[i:i + size]}, ensure_ascii=False)}\n\n"
+        if delay:
+            time.sleep(delay)
+
+
 def _session_stream_gen(user, sid, agent_ref, svc, payload, message):
     """统一流式：转发下游 SSE 给前端，并行解析 delta/done/error，流结束把 bot 这一轮与新续接 token 落库。
     （user 消息已在外层先 append。）云端 agent 以一次性结果包成单个 delta+done。"""
@@ -1313,7 +1322,7 @@ def _session_stream_gen(user, sid, agent_ref, svc, payload, message):
                 # 用我方稳定 sid 作 AgentRun 会话亲和键 + openclaw 会话键：同一会话粘同一沙箱（历史留沙箱），跨会话隔离
                 r = _cloud().chat(agent_ref, message, sid)
                 acc = r.get("reply", ""); new_tok = r.get("session_id") or new_tok
-                yield f"event: delta\ndata: {json.dumps({'text': acc}, ensure_ascii=False)}\n\n"
+                yield from _sse_text_deltas(acc)          # 逐字推送，与本地一致的流式观感
                 yield f"event: done\ndata: {json.dumps(r, ensure_ascii=False)}\n\n"
             except Exception as e:
                 err_text = f"云端 agent 不可达：{e}"

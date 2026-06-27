@@ -239,6 +239,7 @@ export function DebugPanel({ cfg, chatPath, streamPath, initialMsgs, onTurn }) {
   };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <style>{`@keyframes pgBlink{0%,100%{opacity:1}50%{opacity:0}}@keyframes pgBounce{0%,80%,100%{transform:translateY(0);opacity:.35}40%{transform:translateY(-4px);opacity:1}}.pg-caret{animation:pgBlink 1s steps(1) infinite;color:#8A8C99;margin-left:1px}.pg-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#9A9CAA;margin:0 2px;animation:pgBounce 1.2s infinite}`}</style>
       <div style={{ flex: 1, overflow: 'auto', padding: '4px 2px' }}>
         {msgs.map((m, i) => m.role === 'sys' ? (
           <div key={i} style={{ textAlign: 'center', fontSize: 12, color: '#8A8C99', margin: '8px 0 16px' }}>{m.text}</div>
@@ -246,15 +247,20 @@ export function DebugPanel({ cfg, chatPath, streamPath, initialMsgs, onTurn }) {
           <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
             <div style={{
               maxWidth: '82%', padding: '10px 13px', borderRadius: 12, fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap',
-              background: m.role === 'user' ? ACCENT : '#F4F4F7', color: m.role === 'user' ? '#fff' : '#2A2A33',
+              background: m.role === 'user' ? ACCENT : '#F4F4F7', color: m.role === 'user' ? '#fff' : (m.err ? '#D4380D' : '#2A2A33'),
               borderBottomRightRadius: m.role === 'user' ? 3 : 12, borderBottomLeftRadius: m.role === 'bot' ? 3 : 12,
-            }}>{m.text}</div>
+            }}>
+              {m.role === 'bot' && m.pending && !m.text
+                ? <span style={{ display: 'inline-flex', alignItems: 'center' }} aria-label="正在回复"><span className="pg-dot" style={{ animationDelay: '0s' }} /><span className="pg-dot" style={{ animationDelay: '.18s' }} /><span className="pg-dot" style={{ animationDelay: '.36s' }} /></span>
+                : <>{m.text}{m.role === 'bot' && m.pending ? <span className="pg-caret">▋</span> : null}</>}
+            </div>
           </div>
         ))}
       </div>
+      {busy && <div style={{ fontSize: 12, color: '#8A8C99', padding: '0 2px 8px', display: 'flex', alignItems: 'center', gap: 6 }}><Spin size="small" /> Agent 正在回复…（请等本轮结束）</div>}
       <div style={{ display: 'flex', gap: 8, paddingTop: 12, borderTop: '1px solid #F1F1F5' }}>
-        <Input placeholder="输入消息，试跑当前 Agent…" value={input} onChange={e => setInput(e.target.value)} onPressEnter={send} />
-        <Button type="primary" icon={<SendOutlined />} onClick={send} />
+        <Input placeholder={busy ? '回复中，请稍候…' : '输入消息，试跑当前 Agent…'} value={input} disabled={busy} onChange={e => setInput(e.target.value)} onPressEnter={send} />
+        <Button type="primary" icon={<SendOutlined />} loading={busy} disabled={busy} onClick={send} />
       </div>
     </div>
   );
@@ -715,10 +721,18 @@ export function Playground({ agents, embedded }) {
   // 会话管理（统一 /api/sessions，按 agent 过滤）——切 tab 回来即由此重载、回显
   const loadPgSessions = async (aid) => { try { const l = await apiCall(`/api/sessions?agent=${aid}`); setPgSessions(l || []); return l || []; } catch { return []; } };
   const switchPgSession = async (sid) => { try { const s = await apiCall(`/api/sessions/${sid}`); setPsid(sid); setPgMsgs(s.messages || []); } catch (e) { antMsg.error(e.message); } };
-  const newPgSession = async (aid) => {
+  const pgSessionsRef = React.useRef([]);
+  pgSessionsRef.current = pgSessions;
+  const creatingRef = React.useRef(null);           // 正在为某 agent 建会话 → 防并发重复创建
+  const newPgSession = async (aid, { reuseEmpty = false } = {}) => {
+    // 已存在空会话（count 0）则复用，避免「进入新 agent / 连点新会话」出现多个空会话
+    if (reuseEmpty) { const empty = pgSessionsRef.current.find(x => !x.count); if (empty) return switchPgSession(empty.id); }
+    if (creatingRef.current === aid) return;          // StrictMode 双跑 / 连点：同一 agent 只建一条
+    creatingRef.current = aid;
     try { const s = await apiCall('/api/sessions', { method: 'POST', body: JSON.stringify({ agent: aid }) });
       setPsid(s.id); setPgMsgs([]); setPgSessions(p => [{ id: s.id, title: s.title, updatedAt: s.updatedAt, count: 0 }, ...p.filter(x => x.id !== s.id)]); }
     catch (e) { antMsg.error(e.message); }
+    finally { creatingRef.current = null; }
   };
   const delPgSession = async (sid) => {
     try { await apiCall(`/api/sessions/${sid}`, { method: 'DELETE' });
@@ -739,7 +753,10 @@ export function Playground({ agents, embedded }) {
       catch (e) { antMsg.error('加载失败：' + e.message); }
     } else { const a = agents.find(x => x.id === item.id); setCfg(a ? { ...a } : null); }
   };
-  React.useEffect(() => {
+  const initedRef = React.useRef(false);
+  React.useEffect(() => {                              // 进入页面一次（防 StrictMode 双跑导致两个空会话）
+    if (initedRef.current) return;
+    initedRef.current = true;
     if (API_ON) { loadSvc(); apiCall('/api/published').then(d => { setList(d); if (d[0]) pick(d[0]); }).catch(() => {}); }
     else if (agents[0]) pick({ id: agents[0].id, version: agents[0].version });
   }, []);
@@ -753,25 +770,28 @@ export function Playground({ agents, embedded }) {
       )}
       {list.length === 0
         ? <div style={{ border: '1px dashed #DEDEE3', borderRadius: 8, padding: '40px 0', background: '#FCFCFD' }}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有已发布的 Agent —— 去详情或编辑页点「发布」" /></div>
-        : <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-            <div style={{ width: 240, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {list.map(it => {
-                const active = sel && sel.id === it.id;
-                return (
-                  <div key={it.id} onClick={() => pick(it)} style={{ padding: '10px 12px', border: '1px solid ' + (active ? ACCENT : '#EBEBF1'), background: active ? '#F5F5FE' : '#fff', borderRadius: 8, cursor: 'pointer' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontWeight: 650, fontSize: 13.5, color: '#17171C' }}>{it.name}</span>
-                      <span style={pill('#F1F1F4', '#5A5C6B')}>v{it.version}</span>
-                      <span style={pill('#EEF0FF', '#4F46E5')}>{fwName(it.framework)}</span>
-                    </div>
-                    <div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 11.5, color: '#5A5C6B', marginTop: 4 }}>{it.model}</div>
-                  </div>
-                );
-              })}
-            </div>
+        : <div>
+          <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, color: '#5A5C6B', fontWeight: 600 }}>Agent</span>
+            <Select
+              value={sel ? sel.id : undefined}
+              placeholder="选择一个已发布的 Agent"
+              style={{ minWidth: 360 }}
+              optionLabelProp="label"
+              onChange={id => { const it = list.find(x => x.id === id); if (it) pick(it); }}
+              options={list.map(it => ({
+                value: it.id,
+                label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ fontWeight: 600, color: '#17171C' }}>{it.name}</span><span style={pill('#F1F1F4', '#5A5C6B')}>v{it.version}</span><span style={pill('#EEF0FF', '#4F46E5')}>{fwName(it.framework)}</span></span>,
+                title: it.name,
+                children: <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}><span style={{ fontWeight: 600, color: '#17171C' }}>{it.name}</span><span style={pill('#F1F1F4', '#5A5C6B')}>v{it.version}</span><span style={pill('#EEF0FF', '#4F46E5')}>{fwName(it.framework)}</span><span style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 11, color: '#8A8C99' }}>{it.model}</span></div>,
+              }))}
+              optionRender={opt => opt.data.children}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
             {cfg && (
               <div style={{ width: 184, flexShrink: 0, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 170px)' }}>
-                <Button size="small" icon={<PlusOutlined />} onClick={() => sel && newPgSession(sel.id)} style={{ marginBottom: 8 }}>新会话</Button>
+                <Button size="small" icon={<PlusOutlined />} onClick={() => sel && newPgSession(sel.id, { reuseEmpty: true })} style={{ marginBottom: 8 }}>新会话</Button>
                 <div style={{ flex: 1, overflow: 'auto' }}>
                   {pgSessions.length === 0
                     ? <div style={{ textAlign: 'center', color: '#C2C4CE', fontSize: 12, padding: '16px 0' }}>暂无会话</div>
@@ -802,9 +822,10 @@ export function Playground({ agents, embedded }) {
                     chatPath={psid ? `/api/sessions/${psid}/events` : `/api/agents/${sel.id}/service-chat`}
                     streamPath={psid ? `/api/sessions/${psid}/events/stream` : `/api/agents/${sel.id}/service-chat/stream`} /></div>
                 </div>
-                : <Empty description="选择左侧一个 Agent 开始对话" />}
+                : <Empty description="在上方选择一个 Agent 开始对话" />}
             </div>
-          </div>}
+          </div>
+        </div>}
     </div>
   );
 }
