@@ -61,9 +61,17 @@ function Root() {
   }, [agents, curWs, search, sort]);
 
   const switchWs = id => { setCurWs(id); setView({ name: 'list' }); setNav('agent'); setSearch(''); if (API_ON) loadAgents(id); };
-  const saveNew = data => {
-    if (API_ON) { apiCall('/api/agents', { method: 'POST', body: JSON.stringify({ ...data, ws_id: curWs }) }).then(() => { message.success(`已创建「${data.name}」及初始版本 v1`); loadAgents(curWs); setView({ name: 'list' }); }).catch(e => message.error('创建失败：' + e.message)); return; }
-    const id = 'a' + (++AGENT_SEQ); const ts = now(); setAgents([{ id, wsId: curWs, version: 1, updatedAt: ts, deleted: false, ...data, versions: [{ version: 1, createdAt: ts, config: { ...data } }] }, ...agents]); message.success(`已创建「${data.name}」及初始版本 v1`); setView({ name: 'list' });
+  // stay=true：创建后停留在 Builder（用于「创建并发布」），返回新建 agent；否则回列表
+  const saveNew = (data, stay) => {
+    if (API_ON) {
+      return apiCall('/api/agents', { method: 'POST', body: JSON.stringify({ ...data, ws_id: curWs }) })
+        .then(a => { message.success(`已创建「${data.name}」及初始版本 v1`); loadAgents(curWs); if (!stay) setView({ name: 'list' }); return a; })
+        .catch(e => { message.error('创建失败：' + e.message); return null; });
+    }
+    const id = 'a' + (++AGENT_SEQ); const ts = now();
+    const a = { id, wsId: curWs, version: 1, updatedAt: ts, deleted: false, ...data, versions: [{ version: 1, createdAt: ts, config: { ...data } }] };
+    setAgents([a, ...agents]); message.success(`已创建「${data.name}」及初始版本 v1`); if (!stay) setView({ name: 'list' });
+    return Promise.resolve(a);
   };
   const saveEdit = (orig, data) => {
     if (API_ON) { apiCall(`/api/agents/${orig.id}`, { method: 'PUT', body: JSON.stringify({ model: data.model, desc: data.desc, params: data.params, files: data.files, tools: data.tools, skills: data.skills }) }).then(() => { message.success(`已保存为新版本 v${orig.version + 1}`); loadAgents(curWs); setView({ name: 'list' }); }).catch(e => message.error('保存失败：' + e.message)); return; }
@@ -227,7 +235,7 @@ function Root() {
                   </div>}
             </div>
           )}
-          {nav === 'agent' && view.name === 'create' && <AgentBuilder mode="create" wsId={curWs} onCancel={() => setView({ name: 'list' })} onSave={saveNew} />}
+          {nav === 'agent' && view.name === 'create' && <AgentBuilder mode="create" wsId={curWs} onCancel={() => setView({ name: 'list' })} onSave={saveNew} onCreate={data => saveNew(data, true)} onPublished={() => { if (API_ON) { loadAgents(curWs); loadServices(); } }} />}
           {nav === 'agent' && view.name === 'edit' && <AgentBuilder mode="edit" agent={view.agent} wsId={curWs} onCancel={() => setView({ name: 'list' })} onSave={data => saveEdit(view.agent, data)} onPublished={() => { if (API_ON) { loadAgents(curWs); loadServices(); } }} />}
           {nav === 'agent' && view.name === 'detail' && <AgentDetail agent={agents.find(a => a.id === view.agent.id) || view.agent} service={svcMap[view.agent.id] || null} onServiceChanged={() => { if (API_ON) loadServices(); }} onBack={() => setView({ name: 'list' })} onEdit={a => setView({ name: 'edit', agent: a })} onDiff={a => setView({ name: 'diff', agent: a })} />}
           {nav === 'agent' && view.name === 'diff' && <VersionDiff agent={agents.find(a => a.id === view.agent.id) || view.agent} onBack={() => setView({ name: 'detail', agent: view.agent })} />}
