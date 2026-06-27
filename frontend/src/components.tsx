@@ -47,12 +47,15 @@ export function CodeEditor({ value, onChange, rows = 12 }) {
 }
 
 /* ================= 发布结果弹窗（详情/Builder 共用）================= */
-export function PublishChooser({ open, agentName, onCancel, onConfirm }) {
-  const [iso, setIso] = useState('L1');
+export function PublishChooser({ open, agentName, defaultIso, curIso, onCancel, onConfirm }) {
+  const [iso, setIso] = useState(defaultIso || 'L1');
+  // 每次打开时把选中项重置为「当前运行环境」，迁移时一眼看出从哪改到哪
+  React.useEffect(() => { if (open) setIso(defaultIso || 'L1'); }, [open, defaultIso]);
+  const migrating = curIso && iso !== curIso;
   return (
     <Modal title={`发布${agentName ? '「' + agentName + '」' : ''}`} open={open} onCancel={onCancel}
-      okText="发布" onOk={() => onConfirm(iso)} width={520} destroyOnClose>
-      <div style={{ fontSize: 13, color: '#5A5C6B', margin: '4px 0 12px' }}>选择运行环境（决定隔离强度——成本与互相影响范围）：</div>
+      okText={migrating ? '迁移并发布' : '发布'} onOk={() => onConfirm(iso)} width={520} destroyOnClose>
+      <div style={{ fontSize: 13, color: '#5A5C6B', margin: '4px 0 12px' }}>选择运行环境（决定隔离强度——成本与互相影响范围）{curIso ? <>；当前 <span style={pill('#F1F1F4', '#5A5C6B')}>{isoName(curIso)} · {curIso}</span></> : ''}：</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {ISOLATIONS.map(o => {
           const on = iso === o.key;
@@ -261,7 +264,7 @@ export function DebugPanel({ cfg, chatPath, streamPath, initialMsgs, onTurn }) {
 }
 
 /* ================= Builder：创建/编辑 (Spec A/B/C + I) ================= */
-export function AgentBuilder({ mode, agent, onCancel, onSave, onPublished, wsId }) {
+export function AgentBuilder({ mode, agent, onCancel, onSave, onCreate, onPublished, wsId }) {
   const isEdit = mode === 'edit';
   const init = agent || {};
   const ws = wsId || init.wsId;
@@ -279,15 +282,27 @@ export function AgentBuilder({ mode, agent, onCancel, onSave, onPublished, wsId 
   const [previewFmt, setPreviewFmt] = useState('JSON');
   const [pub, setPub] = useState(null);
   const [choose, setChoose] = useState(false);
+  const [createdAgent, setCreatedAgent] = useState(null); // 「创建并发布」时先创建得到的 agent
+  const pubTarget = agent || createdAgent;                 // 编辑态=既有 agent；创建态=刚创建的 agent
   const askPublish = () => { if (!API_ON) { message.info('发布需先在本机启动后端'); return; } setChoose(true); };
   const doPublish = async (iso) => {
     setChoose(false);
+    if (!pubTarget) return;
     try {
       // 发布 = 把当前配置存为新版本(有改动才升版本)并发布；iso=运行环境/隔离级别
-      const r = await apiCall(`/api/agents/${agent.id}/publish?isolation=${iso || 'L1'}`, { method: 'POST', body: JSON.stringify({ config: cfg }) });
+      const r = await apiCall(`/api/agents/${pubTarget.id}/publish?isolation=${iso || 'L1'}`, { method: 'POST', body: JSON.stringify({ config: cfg }) });
       setPub(r);
       if (onPublished) onPublished();
     } catch (e) { message.error('发布失败：' + e.message); }
+  };
+  // 「创建并发布」：先创建 v1（停留在 Builder）拿到 id，再选运行环境发布
+  const createAndPublish = async () => {
+    if (!canSave) return;
+    if (!API_ON) { message.info('发布需先在本机启动后端，已仅创建草稿'); onSave(cfg); return; }
+    const a = await onCreate(cfg);
+    if (!a) return;
+    setCreatedAgent(a);
+    setChoose(true);
   };
 
   const pickFramework = key => {
@@ -349,10 +364,23 @@ export function AgentBuilder({ mode, agent, onCancel, onSave, onPublished, wsId 
         </Popover>
         <Tooltip title="配置预览"><Button icon={<FileTextOutlined />} type={panel === 'preview' ? 'primary' : 'default'} onClick={() => togglePanel('preview')} /></Tooltip>
         <Button icon={<MessageOutlined />} type={panel === 'debug' ? 'primary' : 'default'} onClick={() => togglePanel('debug')}>调试</Button>
-        {isEdit && <Tooltip title="发布已保存的最新版本（如刚改过先保存）；点击后选运行环境"><Button onClick={askPublish}>发布</Button></Tooltip>}
-        <Tooltip title={!canSave ? (isEdit ? '无变更或必填项未完善' : '请填写名称并选择模型') : ''}>
-          <Button type="primary" disabled={!canSave} onClick={() => onSave(cfg)}>{isEdit ? '保存为新版本' : '创建 (v1)'}</Button>
-        </Tooltip>
+        {isEdit ? (
+          <>
+            <Tooltip title="把当前已保存的最新版本上线运行（如刚改过先点保存）；点击后选运行环境"><Button onClick={askPublish}>发布</Button></Tooltip>
+            <Tooltip title={!canSave ? '无变更或必填项未完善' : ''}>
+              <Button type="primary" disabled={!canSave} onClick={() => onSave(cfg)}>保存为新版本</Button>
+            </Tooltip>
+          </>
+        ) : (
+          <>
+            <Tooltip title={!canSave ? '请填写名称并选择模型' : '只创建 v1，暂不上线运行'}>
+              <Button disabled={!canSave} onClick={() => onSave(cfg)}>仅创建草稿</Button>
+            </Tooltip>
+            <Tooltip title={!canSave ? '请填写名称并选择模型' : (!API_ON ? '发布需先在本机启动后端' : '创建 v1 并选运行环境直接上线')}>
+              <Button type="primary" disabled={!canSave} onClick={createAndPublish}>创建并发布</Button>
+            </Tooltip>
+          </>
+        )}
       </div>
 
       {/* 主区：配置编辑器为重点 + 可收起的右侧面板 */}
@@ -412,8 +440,10 @@ export function AgentBuilder({ mode, agent, onCancel, onSave, onPublished, wsId 
 
       <AssetDrawer open={drawer === 'tool'} type="tool" wsId={ws} selected={tools} onClose={() => setDrawer(null)} onConfirm={s => { setTools(s); setDrawer(null); }} />
       <AssetDrawer open={drawer === 'skill'} type="skill" wsId={ws} selected={skills} onClose={() => setDrawer(null)} onConfirm={s => { setSkills(s); setDrawer(null); }} />
-      <PublishChooser open={choose} agentName={name} onCancel={() => setChoose(false)} onConfirm={doPublish} />
-      <PublishModal pub={pub} agentName={name} onClose={() => setPub(null)} />
+      {/* 创建态取消环境选择：v1 已建为草稿，回列表即可看到（未发布） */}
+      <PublishChooser open={choose} agentName={name} onCancel={() => { setChoose(false); if (!isEdit && createdAgent) onCancel(); }} onConfirm={doPublish} />
+      {/* 创建态发布完成后关闭弹窗即回列表 */}
+      <PublishModal pub={pub} agentName={name} onClose={() => { setPub(null); if (!isEdit && createdAgent) onCancel(); }} />
     </div>
   );
 }
@@ -425,13 +455,20 @@ export function AgentDetail({ agent, service, onServiceChanged, onBack, onEdit, 
   const [pub, setPub] = useState(null);
   const [choose, setChoose] = useState(false);
   const askPublish = () => { if (!API_ON) { antMsg.info('发布需先在本机启动后端'); return; } setChoose(true); };
+  // 发布(选定版本) = 把所选 ver 以某隔离级别上线，并替换运行实例
   const doPublish = async (iso) => {
     setChoose(false);
     try { setPub(await apiCall(`/api/agents/${agent.id}/publish?version=${ver}&isolation=${iso || 'L1'}`, { method: 'POST' })); onServiceChanged && onServiceChanged(); }
     catch (e) { antMsg.error('发布失败：' + e.message); }
   };
+  // 启动 = 用「已发布版本 + 原隔离级别」一键把实例拉起（不重新发布、不弹环境选择）
+  const startPublished = async () => {
+    if (!API_ON) { antMsg.info('启动需先在本机启动后端'); return; }
+    try { await apiCall(`/api/agents/${agent.id}/publish?version=${agent.publishedVersion}&isolation=${agent.publishedIsolation || 'L1'}`, { method: 'POST' }); antMsg.success(`已启动（v${agent.publishedVersion} · ${isoName(agent.publishedIsolation || 'L1')}）`); onServiceChanged && onServiceChanged(); }
+    catch (e) { antMsg.error('启动失败：' + e.message); }
+  };
   const stopService = async () => {
-    try { await apiCall(`/api/agents/${agent.id}/service/stop`, { method: 'POST' }); antMsg.success('已停服'); onServiceChanged && onServiceChanged(); }
+    try { await apiCall(`/api/agents/${agent.id}/service/stop`, { method: 'POST' }); antMsg.success('已停服（已发布配置保留，稳定地址不变）'); onServiceChanged && onServiceChanged(); }
     catch (e) { antMsg.error('停服失败：' + e.message); }
   };
   // 对外用**稳定地址**（按 id 经网关路由）；裸端口是内部细节、会变、勿直连
@@ -446,6 +483,12 @@ export function AgentDetail({ agent, service, onServiceChanged, onBack, onEdit, 
   // 按所选版本读取该版本的配置快照（而非永远读最新）
   const vc = (versions.find(v => v.version === ver) || {}).config || agent;
   const fileKeys = Object.keys(vc.files || {});
+  // —— 运行控制状态机：发布(管"哪份配置上线") / 启动·停服(管"实例开不开") ——
+  const deploying = service && service.status === 'deploying';
+  const failed = service && service.status === 'failed';
+  const running = service && !deploying && !failed;
+  const liveVer = running ? service.version : agent.publishedVersion; // 当前线上/已发布的版本
+  const canPushSelected = agent.published || running ? ver !== liveVer : true; // 选中版本可发布上线
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
@@ -461,38 +504,57 @@ export function AgentDetail({ agent, service, onServiceChanged, onBack, onEdit, 
             <Button disabled={versions.length < 2} onClick={() => onDiff(agent)}>对比版本</Button>
           </Tooltip>
           <Button icon={<ThunderboltOutlined />} onClick={() => setPlay(true)}>试跑</Button>
-          <Button onClick={askPublish}>发布</Button>
           <Button type="primary" icon={<EditOutlined />} onClick={() => onEdit(agent)}>编辑</Button>
         </Space>
       </div>
-      <PublishChooser open={choose} agentName={agent.name} onCancel={() => setChoose(false)} onConfirm={doPublish} />
+      <PublishChooser open={choose} agentName={agent.name}
+        defaultIso={(service && service.isolation) || agent.publishedIsolation || 'L1'}
+        curIso={(service && service.isolation) || agent.publishedIsolation || null}
+        onCancel={() => setChoose(false)} onConfirm={doPublish} />
       <PublishModal pub={pub} agentName={agent.name} onClose={() => setPub(null)} />
-      {(service || agent.published) && (
+      {(
         <div style={{ background: '#fff', border: '1px solid #ECECEF', borderRadius: 8, padding: '12px 16px', marginBottom: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div style={{ fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <span style={{ fontWeight: 650 }}>运行服务</span>
+              <span style={{ fontWeight: 650 }}>运行</span>
               <span style={pill('#EEF0FF', '#4F46E5')}>{fwName(agent.framework)}</span>
               {service && service.isolation && <span style={pill('#F1F1F4', '#5A5C6B')}>{isoName(service.isolation)} · {service.isolation}</span>}
               {service && (service.location === 'cloud'
                 ? <span style={pill('#EEF0FF', '#4F46E5')}>☁ 云端</span>
                 : <span style={pill('#F1F1F4', '#5A5C6B')}>本地</span>)}
-              {!service
-                ? <span style={pill('#F1F1F4', '#A6A8B4')}>○ 已停止</span>
-                : service.status === 'deploying'
+              {!agent.published && !service
+                ? <span style={pill('#F1F1F4', '#A6A8B4')}>未发布</span>
+                : deploying
                   ? <span style={pill('#FFF8E6', '#946C00')}>◌ 部署中…（云端约 1–2 分钟）</span>
-                  : service.status === 'failed'
+                  : failed
                     ? <Tooltip title={service.error || ''}><span style={pill('#FDECEC', '#C0392B')}>✕ 部署失败</span></Tooltip>
-                    : <><span style={pill('#E9F7EF', '#1E8449')}>● 运行中 v{service.version}</span><Tooltip title={'内部端口（会变，勿直连）：' + (service.internal_url || service.url || '')}><Text code style={{ fontSize: 12 }}>{stablePath}</Text></Tooltip></>}
+                    : running
+                      ? <><span style={pill('#E9F7EF', '#1E8449')}>● 运行中 v{service.version}</span><Tooltip title={'内部端口（会变，勿直连）：' + (service.internal_url || service.url || '')}><Text code style={{ fontSize: 12 }}>{stablePath}</Text></Tooltip></>
+                      : <span style={pill('#F1F1F4', '#A6A8B4')}>○ 已发布 v{agent.publishedVersion} · 已停止</span>}
             </div>
             <Space>
-              {!service
-                ? <Button size="small" onClick={askPublish}>启动（重新发布）</Button>
-                : service.status === 'deploying'
+              {/* 状态机：发布(把所选版本上线) 与 启动/停服(实例开关) 分层，互不抢位 */}
+              {!agent.published && !service
+                ? <Button size="small" type="primary" onClick={askPublish}>发布并启动</Button>
+                : deploying
                   ? <Button size="small" loading disabled>部署中</Button>
-                  : service.status === 'failed'
-                    ? <Button size="small" onClick={askPublish}>重新发布</Button>
-                    : <Popconfirm title="停止该 Agent 服务？" onConfirm={stopService}><Button size="small" danger>停服</Button></Popconfirm>}
+                  : failed
+                    ? <Button size="small" type="primary" onClick={askPublish}>重新发布</Button>
+                    : running
+                      ? <>
+                          {/* 发布：可换版本，也可换环境（本地↔云端迁移）——始终可点，不再只在有新版本时出现 */}
+                          <Tooltip title={canPushSelected ? `把所选 v${ver} 上线，替换运行中的 v${service.version}` : '换运行环境后重新发布（如本地→云端），替换当前实例'}>
+                            <Button size="small" type={canPushSelected ? 'primary' : 'default'} onClick={askPublish}>{canPushSelected ? `发布 v${ver}` : '重新发布'}</Button>
+                          </Tooltip>
+                          <Popconfirm title="停止该 Agent 服务？" description="仅停实例，已发布配置与稳定地址保留" onConfirm={stopService}><Button size="small" danger>停服</Button></Popconfirm>
+                        </>
+                      : <>
+                          <Tooltip title={`用已发布的 v${agent.publishedVersion} · ${isoName(agent.publishedIsolation || 'L1')} 原样拉起（同环境，一键）`}><Button size="small" type="primary" onClick={startPublished}>启动</Button></Tooltip>
+                          {/* 换环境/版本再上线：本地→云端走这里 */}
+                          <Tooltip title={canPushSelected ? `改发布所选 v${ver}（可换运行环境）` : '换运行环境重新发布（如本地→云端）'}>
+                            <Button size="small" onClick={askPublish}>{canPushSelected ? `发布 v${ver}` : '重新发布'}</Button>
+                          </Tooltip>
+                        </>}
             </Space>
           </div>
           {agent.framework === 'OPENCLAW' && (

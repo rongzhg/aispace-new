@@ -697,7 +697,8 @@ def remove_member(ws_id: str, user_id: str):
 
 # ----- agents -----
 def _pub_map(c):
-    return {r["agent_id"]: r["version"] for r in c.execute("SELECT agent_id, version FROM published").fetchall()}
+    return {r["agent_id"]: {"version": r["version"], "isolation": r["isolation"]}
+            for r in c.execute("SELECT agent_id, version, isolation FROM published").fetchall()}
 
 
 @app.get("/api/agents")
@@ -708,7 +709,9 @@ def list_agents(ws: str):
         out = []
         for r in rows:
             a = row_to_agent(r)
-            a["publishedVersion"] = pub.get(r["id"])
+            p = pub.get(r["id"])
+            a["publishedVersion"] = p["version"] if p else None
+            a["publishedIsolation"] = p["isolation"] if p else None
             a["published"] = r["id"] in pub
             out.append(a)
         return out
@@ -724,7 +727,9 @@ def get_agent(aid: str):
         vs = c.execute("SELECT version,created_at,config FROM versions WHERE agent_id=? ORDER BY version", (aid,)).fetchall()
         a["versions"] = [{"version": v["version"], "createdAt": v["created_at"], "config": json.loads(v["config"])} for v in vs]
         pub = _pub_map(c)
-        a["publishedVersion"] = pub.get(aid)
+        p = pub.get(aid)
+        a["publishedVersion"] = p["version"] if p else None
+        a["publishedIsolation"] = p["isolation"] if p else None
         a["published"] = aid in pub
         return a
 
