@@ -11,6 +11,7 @@
 | [接口契约.md](./接口契约.md) | 后端 API 速览（FastAPI，已实现，对前后端 vibe coding 对齐） |
 | [架构设计.md](./架构设计.md) | 后端与运行模式架构（短任务 / 长会话；控制面+数据面；云端 sandbox 方向） |
 | [单sandbox多agent验证.md](./单sandbox多agent验证.md) | 一个 sandbox 跑多 agent：依赖隔离/并发/故障隔离的测试用例与期望结果（已验证） |
+| [运维排障.md](./运维排障.md) | 运行时典型故障定位与修复（如 agent 报「Claude Code 未登录」） |
 
 ## 与产品文档的关系
 
