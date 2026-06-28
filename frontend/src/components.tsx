@@ -1935,111 +1935,11 @@ export function Market({ wsId, wsName, me }) {
 
 /* ================= 部署（发布与运行控制台：发起部署 + 版本钉选 × 环境 tier + 稳定地址 + 运维）================= */
 export function DeployPanel({ agents, services, onServiceChanged }) {
-  const [busy, setBusy] = useState(null);   // 正在操作的 agentId
-  const [dm, setDm] = useState(null);        // 部署弹窗 {agentId, version, iso}
-  const statusEl = s => {
-    if (!s) return <span style={pill('#F1F1F4', '#A6A8B4')}>○ 已停止</span>;
-    if (s.status === 'deploying') return <span style={pill('#FFF8E6', '#946C00')}>◌ 部署中</span>;
-    if (s.status === 'failed') return <Tooltip title={s.error || ''}><span style={pill('#FDECEC', '#C0392B')}>✕ 失败</span></Tooltip>;
-    return <span style={pill('#E9F7EF', '#1E8449')}>● 运行中{s.location === 'cloud' ? '·云' : ''}</span>;
-  };
-  const svcMap = {}; (services || []).forEach(s => { svcMap[s.agentId] = s; });
-  const published = (agents || []).filter(a => a.published);
-  const running = published.filter(a => { const s = svcMap[a.id]; return s && s.status !== 'failed' && s.status !== 'deploying'; }).length;
-  const stableUrl = a => { const s = svcMap[a.id]; return (s && s.stable_url) || (location.origin + `/api/agents/${a.id}/service-chat`); };
-  const copy = x => { navigator.clipboard && navigator.clipboard.writeText(x); antMsg.success('已复制'); };
-  const stopOne = async aid => { try { await apiCall(`/api/agents/${aid}/service/stop`, { method: 'POST' }); antMsg.success('已停服'); onServiceChanged && onServiceChanged(); } catch (e) { antMsg.error(e.message); } };
-  // 发布/迁移/钉选/重启 都是 publish 的不同参数（单主实例：停旧起新）
-  const deploy = async (aid, iso, version, note) => {
-    setBusy(aid);
-    const vq = version ? `&version=${version}` : '';
-    try { await apiCall(`/api/agents/${aid}/publish?isolation=${iso}${vq}`, { method: 'POST', body: '{}' }); antMsg.success(note || '已更新部署'); onServiceChanged && onServiceChanged(); }
-    catch (e) { antMsg.error(e.message); }
-    finally { setBusy(null); }
-  };
-  const dmAgent = dm && (agents || []).find(a => a.id === dm.agentId);
-  const dmTier = ISOLATIONS.find(o => o.key === ((dm && dm.iso) || 'L1'));
-  const openNew = () => { const a = (agents || [])[0]; setDm({ agentId: a && a.id, version: a && a.version, iso: 'L1', existing: false }); };
-  const openManage = a => { const s = svcMap[a.id]; setDm({ agentId: a.id, version: a.publishedVersion || a.version, iso: (s && s.isolation) || 'L1', existing: true }); };
-  const apply = async () => { if (!dm || !dm.agentId) return; await deploy(dm.agentId, dm.iso || 'L1', dm.version, dm.existing ? '已更新部署' : `已部署「${dmAgent ? dmAgent.name : ''}」`); setDm(null); };
-  const restartModal = async () => { if (!dm) return; await deploy(dm.agentId, dm.iso || 'L1', dm.version, '已重启'); setDm(null); };
-  const stopModal = async () => { if (!dm) return; await stopOne(dm.agentId); setDm(null); };
-
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 }}>
-        <div>
-          <div style={{ fontSize: 20, fontWeight: 750, letterSpacing: -0.3, color: '#17171C' }}>部署</div>
-          <Text style={{ color: '#8A8C99', fontSize: 13.5 }}>发布与运行控制台：发起部署、查看运行态与稳定地址；点「管理」改版本 / 部署方式、停 / 重启</Text>
-        </div>
-        <Button type="primary" icon={<PlusOutlined />} disabled={!API_ON || (agents || []).length === 0} onClick={openNew}>部署 Agent</Button>
-      </div>
-      {!API_ON ? <Empty description="部署需先在本机启动后端" /> : (<>
-        <div style={{ display: 'flex', gap: 18, marginBottom: 14, fontSize: 12.5, color: '#5A5C6B' }}>
-          <span>已部署 <b style={{ color: '#17171C' }}>{published.length}</b></span>
-          <span>运行中 <b style={{ color: '#1E8449' }}>{running}</b></span>
-          <span>已停止 <b style={{ color: '#A6A8B4' }}>{published.length - running}</b></span>
-        </div>
-        {published.length === 0
-          ? <div style={{ border: '1px dashed #DEDEE3', borderRadius: 8, padding: '32px 24px', background: '#FCFCFD', textAlign: 'center' }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: '#33333C', marginBottom: 6 }}>还没有部署</div>
-              <div style={{ fontSize: 12.5, color: '#8A8C99', marginBottom: 16 }}>三步:① 选一个 Agent ② 选版本 + 部署方式(L0/L1/L2) ③ 发布并在此管理</div>
-              <Button type="primary" icon={<PlusOutlined />} disabled={(agents || []).length === 0} onClick={openNew}>部署 Agent</Button>
-            </div>
-          : <div style={{ border: '1px solid #EBEBF1', borderRadius: 8, overflow: 'hidden' }}>
-              <div style={{ display: 'flex', fontSize: 12, color: '#8A8C99', background: '#FAFAFB', padding: '8px 14px', borderBottom: '1px solid #F1F1F5' }}>
-                <div style={{ flex: 1 }}>Agent / 稳定地址</div><div style={{ width: 90 }}>生产版本</div><div style={{ width: 130 }}>部署方式</div><div style={{ width: 96 }}>运行态</div><div style={{ width: 72 }} />
-              </div>
-              {published.map(a => { const s = svcMap[a.id]; const cur = (s && s.isolation) || 'L1'; const pinned = a.publishedVersion || a.version; const tier = ISOLATIONS.find(o => o.key === cur); return (
-                <div key={a.id} style={{ display: 'flex', alignItems: 'center', padding: '11px 14px', borderBottom: '1px solid #F6F6F9' }}>
-                  <div style={{ flex: 1, minWidth: 0, paddingRight: 10 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{a.name} <span style={pill('#EEF0FF', '#4F46E5')}>{fwName(a.framework)}</span></div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                      <Text code style={{ fontSize: 11, color: '#8A8C99' }} ellipsis>{stableUrl(a)}</Text>
-                      <a onClick={() => copy(stableUrl(a))} style={{ fontSize: 11, color: ACCENT, flexShrink: 0 }}>复制</a>
-                    </div>
-                  </div>
-                  <div style={{ width: 90 }}><span style={pill('#E9F7EF', '#1E8449')}>v{pinned}</span></div>
-                  <div style={{ width: 130 }}><Tooltip title={tier && tier.hint}><span style={pill('#F1F1F4', '#5A5C6B')}>{cur} · {(tier && tier.name) || ''}</span></Tooltip></div>
-                  <div style={{ width: 96 }}>{statusEl(s)}</div>
-                  <div style={{ width: 72, textAlign: 'right' }}><Button size="small" onClick={() => openManage(a)}>管理</Button></div>
-                </div>
-              ); })}
-            </div>}
-        <div style={{ marginTop: 14, fontSize: 12.5, color: '#A6A8B4' }}>想和已发布的 Agent 对话验证？去「Playground」。L3 即用即弃为会话级、不在部署。</div>
-      </>)}
-
-      <Modal title={dm && dm.existing ? `管理部署 · ${dmAgent ? dmAgent.name : ''}` : '部署 Agent'} open={!!dm} onCancel={() => setDm(null)} width={480} destroyOnHidden
-        footer={
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            {dm && dm.existing && svcMap[dm.agentId] && <Popconfirm title="停止该服务？" onConfirm={stopModal}><Button danger>停服</Button></Popconfirm>}
-            {dm && dm.existing && <Button style={{ marginLeft: 8 }} onClick={restartModal}>重启</Button>}
-            <span style={{ flex: 1 }} />
-            <Button onClick={() => setDm(null)}>取消</Button>
-            <Button type="primary" style={{ marginLeft: 8 }} disabled={!dm || !dm.agentId} loading={dm && busy === dm.agentId} onClick={apply}>{dm && dm.existing ? '应用更改' : '发布'}</Button>
-          </div>
-        }>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, margin: '12px 0 4px' }}>
-          <div><div style={{ fontSize: 13, color: '#5A5C6B', marginBottom: 6 }}>Agent</div>
-            {dm && dm.existing
-              ? <div style={{ padding: '6px 11px', border: '1px solid #F1F1F5', borderRadius: 8, background: '#FAFAFB', fontSize: 13.5, fontWeight: 600 }}>{dmAgent ? dmAgent.name : ''} <span style={pill('#EEF0FF', '#4F46E5')}>{dmAgent ? fwName(dmAgent.framework) : ''}</span></div>
-              : <Select value={dm && dm.agentId} style={{ width: '100%' }} placeholder="选择 Agent"
-                  onChange={id => { const a = (agents || []).find(x => x.id === id); setDm(d => ({ ...d, agentId: id, version: a ? a.version : 1 })); }}
-                  options={(agents || []).map(a => ({ value: a.id, label: `${a.name}（${fwName(a.framework)}）` }))} />}</div>
-          <div><div style={{ fontSize: 13, color: '#5A5C6B', marginBottom: 6 }}>生产版本<span style={{ color: '#A6A8B4' }}>（钉选 = 晋升 / 回滚）</span></div>
-            <Select value={dm && dm.version} style={{ width: '100%' }}
-              onChange={v => setDm(d => ({ ...d, version: v }))}
-              options={Array.from({ length: (dmAgent && dmAgent.version) || 1 }, (_, i) => ({ value: i + 1, label: `v${i + 1}${dmAgent && i + 1 === dmAgent.version ? ' · 最新' : ''}` }))} /></div>
-          <div><div style={{ fontSize: 13, color: '#5A5C6B', marginBottom: 6 }}>部署方式（环境 tier）</div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', padding: '7px 10px', background: '#EEF0FF', border: '1px solid #D8DCFB', borderRadius: 8, fontSize: 11.5, color: '#4F46E5', lineHeight: 1.55, marginBottom: 8 }}>
-              <LockOutlined style={{ marginTop: 2, flexShrink: 0 }} /><span>{TENANT_NOTE}</span>
-            </div>
-            <Select value={(dm && dm.iso) || 'L1'} style={{ width: '100%' }} onChange={iso => setDm(d => ({ ...d, iso }))}
-              options={ISOLATIONS.map(o => ({ value: o.key, label: `${o.tag} · ${o.name}` }))} />
-            <div style={{ marginTop: 8, padding: '10px 12px', background: '#F7F8FB', border: '1px solid #EEF0F5', borderRadius: 8, fontSize: 12, color: '#5A5C6B', lineHeight: 1.65, whiteSpace: 'pre-line' }}>{dmTier && dmTier.detail}</div>
-          </div>
-        </div>
-      </Modal>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '120px 24px', textAlign: 'center' }}>
+      <ThunderboltOutlined style={{ fontSize: 40, color: '#C7C8D2', marginBottom: 18 }} />
+      <div style={{ fontSize: 20, fontWeight: 750, letterSpacing: -0.3, color: '#17171C', marginBottom: 8 }}>功能还在设计</div>
+      <Text style={{ color: '#8A8C99', fontSize: 13.5 }}>部署能力正在设计中，敬请期待</Text>
     </div>
   );
 }

@@ -28,7 +28,7 @@ export default defineConfig({
     // 经隧道（cloudflared）访问时，请求 Host 是随机域名，需放行；本地开发不受影响。
     allowedHosts: true,
     proxy: {
-      "/api": { target: "http://localhost:8000", changeOrigin: true },
+      "/api": { target: process.env.API_TARGET || "http://localhost:8000", changeOrigin: true },
     },
   },
 });
