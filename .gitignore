@@ -12,5 +12,9 @@ __pycache__/
 *.db
 *.db.bak-*
 
+# 云端 bundle 产物（已在 OSS、可由 server.js+package.json 重建，勿入库）
+cloud/.octmp/bin/
+cloud/.octmp/oc-code.zip
+
 # 系统
 .DS_Store
