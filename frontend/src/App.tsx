@@ -323,7 +323,7 @@ function Root() {
           {nav === 'chat' && <ChatPanel curWs={curWs} isAdmin={isPlatformAdmin} onChanged={() => { if (API_ON) { loadWorkspaces(); loadAgents(curWs); } }} />}
           {nav === 'deploy' && <DeployPanel agents={visibleAgents} services={services} onServiceChanged={() => { if (API_ON) { loadServices(); loadAgents(curWs); } }} />}
           {nav === 'playground' && <Playground agents={visibleAgents} />}
-          {nav === 'session' && <SessionConsole me={'u0'} />}
+          {nav === 'session' && <SessionConsole me={'u0'} onGoAgents={() => { setNav('agent'); setView({ name: 'list' }); }} />}
           {nav === 'skill' && <SkillMarket wsId={curWs} me={(ws && (ws.members.find(m => m.id === 'u0') || {}).name) || 'Helena（我）'} />}
           {nav === 'mcp' && <McpMarket wsId={curWs} />}
           {nav === 'env' && <EnvPanel />}

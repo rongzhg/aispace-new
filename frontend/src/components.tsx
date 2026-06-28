@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import {
   ConfigProvider, App as AntApp, Layout, Menu, Button, Table, Input, Select, Card, Tabs,
   Drawer, Checkbox, Tag, Collapse, Descriptions, Modal, Tooltip, Avatar, Dropdown,
-  Slider, InputNumber, Popconfirm, Popover, Space, Typography, Empty, Segmented, Divider, theme, message, Spin, Badge, Tree, Upload, Switch,
+  Slider, InputNumber, Popconfirm, Popover, Space, Typography, Empty, Segmented, Divider, theme, message, Spin, Badge, Tree, Upload, Switch, Pagination,
 } from "antd";
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, LockOutlined, SearchOutlined, AppstoreOutlined,
@@ -2023,52 +2023,98 @@ const _statusPill = (s) => s === 'active'
   : <span style={pill('#F1F1F4', '#A6A8B4')}>{s || '—'}</span>;
 const _srcText = (s) => s === 'gateway' ? '网关直连' : s === 'cloud-callback' ? '云端回传' : '平台界面';
 
-export function SessionConsole({ me }) {
+export function SessionConsole({ me, onGoAgents }) {
   const [rows, setRows] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [facets, setFacets] = useState(null);   // 概览统计/过滤候选（全集，不随过滤变）
   const [loading, setLoading] = useState(false);
   const [fAgent, setFAgent] = useState('');     // 所属 Agent 过滤
   const [fIso, setFIso] = useState('');         // 运行环境过滤 L1/L2/L3
-  const [q, setQ] = useState('');               // 关键词（标题）
+  const [q, setQ] = useState('');               // 关键词输入（标题）
+  const [qd, setQd] = useState('');             // 防抖后的关键词（真正打到服务端）
+  const [page, setPage] = useState(0);          // 0-based，服务端分页
+  const PAGE_SIZE = 20;
   const [detail, setDetail] = useState(null);   // 打开的会话明细
   const [dLoading, setDLoading] = useState(false);
+  const [dw, setDw] = useState(560);            // 明细抽屉宽度（可左右拖拽）
 
-  const load = () => {
-    if (!API_ON) { setRows([]); return; }
-    setLoading(true);
-    apiCall('/api/sessions?scope=created&size=1000')
-      .then(d => setRows((d && d.items) || []))
-      .catch(() => setRows([]))
-      .finally(() => setLoading(false));
+  // 拖拽抽屉左缘改宽度（向左拖变宽）
+  const startResize = (e) => {
+    e.preventDefault();
+    const onMove = (ev) => setDw(Math.max(420, Math.min(window.innerWidth - 120, window.innerWidth - ev.clientX)));
+    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); document.body.style.userSelect = ''; };
+    document.body.style.userSelect = 'none';
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
   };
-  React.useEffect(load, []);
 
-  const agentOptions = useMemo(() => {
-    const m = {};
-    rows.forEach(r => { if (!m[r.agent]) m[r.agent] = r.agentName || r.agent; });
-    return Object.entries(m).map(([value, label]) => ({ value, label }));
-  }, [rows]);
+  const load = React.useCallback(() => {
+    if (!API_ON) { setRows([]); setTotal(0); setFacets(null); return; }
+    setLoading(true);
+    const qs = new URLSearchParams({ scope: 'created', page: String(page), size: String(PAGE_SIZE) });
+    if (fAgent) qs.set('agent', fAgent);
+    if (fIso) qs.set('isolation', fIso);
+    if (qd) qs.set('q', qd);
+    apiCall('/api/sessions?' + qs.toString())
+      .then(d => { setRows((d && d.items) || []); setTotal((d && d.total) || 0); if (d && d.facets) setFacets(d.facets); })
+      .catch(() => { setRows([]); setTotal(0); })
+      .finally(() => setLoading(false));
+  }, [page, fAgent, fIso, qd]);
+  React.useEffect(() => { load(); }, [load]);
 
-  const filtered = useMemo(() => rows.filter(r =>
-    (!fAgent || r.agent === fAgent) &&
-    (!fIso || r.isolation === fIso) &&
-    (!q || (r.title || '').toLowerCase().includes(q.toLowerCase()))
-  ), [rows, fAgent, fIso, q]);
+  // 关键词防抖：输入停 300ms 才打服务端，并回到第 1 页
+  React.useEffect(() => { const t = setTimeout(() => { setQd(q.trim()); setPage(0); }, 300); return () => clearTimeout(t); }, [q]);
+
+  // 过滤变更回到第 1 页
+  const pickAgent = (v) => { setFAgent(v || ''); setPage(0); };
+  const pickIso = (v) => { setFIso(v === 'ALL' ? '' : v); setPage(0); };
+
+  const agentOptions = useMemo(() =>
+    ((facets && facets.agents) || []).map(a => ({ value: a.value, label: `${a.label}（${a.count}）` })),
+  [facets]);
 
   const openDetail = (id) => {
     setDLoading(true); setDetail({ loading: true });
     apiCall(`/api/sessions/${id}`).then(d => setDetail(d)).catch(() => setDetail(null)).finally(() => setDLoading(false));
   };
 
-  const field = (label, val) => (
-    <div>
-      <div style={{ fontSize: 11, color: '#A6A8B4', fontWeight: 600, letterSpacing: 0.3, marginBottom: 5 }}>{label}</div>
-      <div style={{ fontSize: 13, color: '#2A2A33', lineHeight: 1.4 }}>{val}</div>
-    </div>
+  const hasFilter = !!(qd || fAgent || fIso);
+
+  // 抽屉内密集元数据：一个 label-value 对，行内排布
+  const meta = (label, val) => (
+    <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, whiteSpace: 'nowrap', minWidth: 0 }}>
+      <span style={{ color: '#A6A8B4', fontSize: 12 }}>{label}</span>
+      <span style={{ color: '#2A2A33', fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis' }}>{val}</span>
+    </span>
   );
+
+  // 轻量表格列（细分隔线、无卡片描边，适合大量会话）
+  const columns = [
+    { title: '会话标题', dataIndex: 'title', ellipsis: true, render: (t, r) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <span style={{ fontWeight: 600, color: '#17171C', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t || '新对话'}</span>
+          {_statusPill(r.status)}
+        </div>
+      ) },
+    { title: '所属 Agent', dataIndex: 'agentName', width: 168, ellipsis: true,
+      render: (t, r) => <span style={{ color: '#5A5C6B' }}>{t || r.agent}</span> },
+    { title: '运行环境', dataIndex: 'isolation', width: 158,
+      render: (_, r) => <span style={pill('#F1F1F4', '#5A5C6B')}>{_envText(r.isolation, r.location)}</span> },
+    { title: '发起人', dataIndex: 'initiator', width: 118, render: (v) => {
+        const other = v && v !== me;
+        return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+          {other && <span style={pill('#FFF8E6', '#946C00')}>他人</span>}
+          <span style={{ ..._MONO, fontSize: 12, color: '#8A8C99' }}>{v || '—'}</span></span>;
+      } },
+    { title: '轮次', dataIndex: 'rounds', width: 60, align: 'right',
+      render: (v, r) => <span style={{ color: '#5A5C6B' }}>{v != null ? v : (Math.ceil((r.count || 0) / 2) || 0)}</span> },
+    { title: '最后活跃', dataIndex: 'updatedAt', width: 132, align: 'right',
+      render: (v) => <span style={{ ..._MONO, color: '#A6A8B4', fontSize: 12 }}>{(v || '').slice(0, 16)}</span> },
+  ];
 
   return (
     <div>
-      <style>{`.sess-row{transition:border-color .12s ease,box-shadow .12s ease}.sess-row:hover{border-color:#C9CAD6 !important;box-shadow:0 1px 2px rgba(20,20,45,0.06)}`}</style>
+      <style>{`.sess-table .ant-table-row{cursor:pointer}.sess-table .ant-table-cell{padding-top:10px !important;padding-bottom:10px !important}.sess-grip:hover{background:rgba(79,70,229,0.18)}.sess-grip:active{background:rgba(79,70,229,0.32)}`}</style>
 
       {/* 页头 */}
       <div style={{ marginBottom: 16 }}>
@@ -2077,91 +2123,73 @@ export function SessionConsole({ me }) {
       </div>
 
       {/* 工具条 */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
         <Input allowClear prefix={<SearchOutlined style={{ color: '#B6B6BE' }} />} placeholder="搜索会话标题" value={q} onChange={e => setQ(e.target.value)} style={{ width: 240 }} />
-        <Select allowClear placeholder="全部 Agent" style={{ width: 180 }} value={fAgent || undefined} onChange={v => setFAgent(v || '')} options={agentOptions} />
-        <Segmented value={fIso || 'ALL'} onChange={v => setFIso(v === 'ALL' ? '' : v)}
+        <Select allowClear showSearch optionFilterProp="label" placeholder="全部 Agent" style={{ width: 200 }} value={fAgent || undefined} onChange={pickAgent} options={agentOptions} />
+        <Segmented value={fIso || 'ALL'} onChange={pickIso}
           options={[{ label: '全部环境', value: 'ALL' }, { label: '共享 L1', value: 'L1' }, { label: '独立 L2', value: 'L2' }, { label: '即用即弃 L3', value: 'L3' }]} />
         <div style={{ flex: 1 }} />
-        <Text style={{ color: '#A6A8B4', fontSize: 12.5 }}>共 {filtered.length} 条</Text>
+        <Text style={{ color: '#A6A8B4', fontSize: 12.5 }}>共 {total} 条{hasFilter ? '（已过滤）' : ''}</Text>
         <Tooltip title="刷新"><Button type="text" icon={<ReloadOutlined />} onClick={load} /></Tooltip>
       </div>
 
-      {/* 列表 · 行卡片（高密度，遵循视觉规范） */}
-      {loading
-        ? <div style={{ padding: '48px 0', textAlign: 'center' }}><Spin /></div>
-        : filtered.length === 0
-          ? <div style={{ border: '1px dashed #DEDEE3', borderRadius: 8, padding: '40px 0', background: '#FCFCFD' }}>
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={!API_ON ? '未连接后端' : (q || fAgent || fIso) ? '没有匹配的会话' : '我创建的 Agent 还没有活跃过的会话'} />
-            </div>
-          : <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {filtered.map(r => {
-                const isCopilot = r.agent === 'copilot';
-                const other = r.initiator && r.initiator !== me;
-                const rounds = Math.ceil((r.count || 0) / 2) || r.count || 0;
-                return (
-                  <div key={r.id} className="sess-row" onClick={() => openDetail(r.id)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 14px', background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, cursor: 'pointer' }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 6, background: '#EEF0FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      {isCopilot ? <MessageOutlined style={{ color: ACCENT, fontSize: 16 }} /> : <RobotOutlined style={{ color: ACCENT, fontSize: 17 }} />}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                        <span style={{ fontWeight: 650, fontSize: 14.5, color: '#17171C', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.title || '新对话'}</span>
-                        {_statusPill(r.status)}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, color: '#8A8C99', fontSize: 12.5, minWidth: 0 }}>
-                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>{r.agentName || r.agent}</span>
-                        <span style={{ color: '#D0D0D8' }}>·</span>
-                        <span style={{ ..._MONO, fontSize: 11.5, color: '#A6A8B4', whiteSpace: 'nowrap' }}>{r.id}</span>
-                      </div>
-                    </div>
-                    <span style={pill('#F1F1F4', '#5A5C6B')}>{_envText(r.isolation, r.location)}</span>
-                    <div style={{ width: 96, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }}>
-                      {other && <span style={pill('#FFF8E6', '#946C00')}>他人</span>}
-                      <span style={{ ..._MONO, fontSize: 11.5, color: '#8A8C99' }}>{r.initiator || '—'}</span>
-                    </div>
-                    <span style={{ width: 40, flexShrink: 0, textAlign: 'right', color: '#A6A8B4', fontSize: 12 }}>{rounds} 轮</span>
-                    <span style={{ width: 84, flexShrink: 0, textAlign: 'right', color: '#A6A8B4', fontSize: 12 }}>{(r.updatedAt || '').slice(5)}</span>
-                  </div>
-                );
-              })}
-            </div>}
+      {/* 列表 · 轻量表格 */}
+      <Table className="sess-table" rowKey="id" size="middle" columns={columns} dataSource={rows} loading={loading}
+        onRow={r => ({ onClick: () => openDetail(r.id) })}
+        pagination={total > PAGE_SIZE
+          ? { current: page + 1, pageSize: PAGE_SIZE, total, showSizeChanger: false, size: 'small',
+              onChange: p => setPage(p - 1), showTotal: (t, [a, b]) => `${a}-${b} / 共 ${t} 条` }
+          : false}
+        locale={{ emptyText: (
+          <div style={{ padding: '36px 0' }}>
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={!API_ON ? '未连接后端' : hasFilter ? '没有匹配的会话' : '我创建的 Agent 还没有活跃过的会话'}>
+              {API_ON && !hasFilter && onGoAgents && <Button type="primary" icon={<RobotOutlined />} onClick={onGoAgents}>去创建 / 部署 Agent</Button>}
+            </Empty>
+          </div>
+        ) }} />
 
-      {/* 明细抽屉 */}
-      <Drawer open={!!detail} width={600} onClose={() => setDetail(null)} closable styles={{ header: { borderBottom: '1px solid #F1F1F5' }, body: { padding: 0 } }}
+      {/* 明细抽屉 · 高密度；只保留列表没有的字段（版本/来源/创建），其余靠列表；宽度可拖拽 */}
+      {detail && <div className="sess-grip" onMouseDown={startResize}
+        style={{ position: 'fixed', top: 0, bottom: 0, left: `calc(100vw - ${dw}px)`, width: 8, marginLeft: -4, cursor: 'col-resize', zIndex: 1001 }} />}
+      <Drawer open={!!detail} width={dw} onClose={() => setDetail(null)} closable styles={{ header: { borderBottom: '1px solid #F1F1F5' }, body: { padding: 0 } }}
         title={detail && !detail.loading
-          ? <div><div style={{ fontSize: 16, fontWeight: 700, color: '#17171C', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{detail.title || '会话明细'}</div>
-              <div style={{ ..._MONO, fontSize: 11.5, color: '#A6A8B4', marginTop: 2 }}>{detail.id}</div></div>
+          ? <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#17171C', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{detail.title || '会话明细'}</div>
+                <div style={{ ..._MONO, fontSize: 11, color: '#A6A8B4', marginTop: 2 }}>{detail.id}</div>
+              </div>
+              {_statusPill(detail.status)}
+            </div>
           : '会话明细'}>
         {dLoading || (detail && detail.loading)
           ? <div style={{ padding: 48, textAlign: 'center' }}><Spin /></div>
           : detail && (
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-              {/* 运行上下文元数据 · 下沉面 */}
-              <div style={{ padding: '18px 20px', background: '#FAFAFB', borderBottom: '1px solid #F1F1F5' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 20px' }}>
-                  {field('所属 Agent', <span>{detail.agentName}{detail.agentVersion ? <span style={{ ...pill('#F1F1F4', '#5A5C6B'), marginLeft: 6 }}>v{detail.agentVersion}</span> : null}</span>)}
-                  {field('运行环境', <span style={pill('#F1F1F4', '#5A5C6B')}>{_envText(detail.isolation, detail.location)}</span>)}
-                  {field('发起人', <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    {detail.initiator && detail.initiator !== me && <span style={pill('#FFF8E6', '#946C00')}>他人</span>}
-                    <span style={_MONO}>{detail.initiator || '—'}</span></span>)}
-                  {field('归集来源', _srcText(detail.source))}
-                  {field('创建时间', <span style={{ ..._MONO, fontSize: 12.5 }}>{detail.createdAt || '—'}</span>)}
-                  {field('最后活跃', <span style={{ ..._MONO, fontSize: 12.5 }}>{detail.updatedAt || '—'}</span>)}
-                </div>
+              {/* 密集元数据条：只放列表里没有的运行上下文（调用版本 / 归集来源 / 创建时间）*/}
+              <div style={{ padding: '10px 20px', background: '#FAFAFB', borderBottom: '1px solid #F1F1F5', display: 'flex', flexWrap: 'wrap', gap: '6px 18px', alignItems: 'center' }}>
+                {detail.agentVersion != null && meta('调用版本', <span style={pill('#EEF0FF', '#4F46E5')}>v{detail.agentVersion}</span>)}
+                {meta('归集来源', _srcText(detail.source))}
+                {meta('创建时间', <span style={_MONO}>{(detail.createdAt || '').slice(0, 16) || '—'}</span>)}
               </div>
-              {/* 对话回看 · 只读 */}
-              <div style={{ flex: 1, overflow: 'auto', padding: 20 }}>
+              {/* 对话回看 · 只读，每条带时间戳 */}
+              <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
                 {(detail.messages || []).length === 0
                   ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="无对话内容" />
-                  : (detail.messages || []).map((m, i) => m.role === 'sys'
-                    ? <div key={i} style={{ textAlign: 'center', fontSize: 12, color: '#A6A8B4', margin: '6px 0 14px' }}>{m.text}</div>
-                    : <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
-                        <div style={{ maxWidth: '82%', padding: '10px 13px', borderRadius: 10, fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', background: m.role === 'user' ? ACCENT : (m.err ? '#FDECEC' : '#F4F4F7'), color: m.role === 'user' ? '#fff' : (m.err ? '#C0392B' : '#2A2A33'), borderBottomRightRadius: m.role === 'user' ? 3 : 10, borderBottomLeftRadius: m.role !== 'user' ? 3 : 10 }}>
+                  : (detail.messages || []).map((m, i) => {
+                    if (m.role === 'sys') return <div key={i} style={{ textAlign: 'center', fontSize: 12, color: '#A6A8B4', margin: '6px 0 14px' }}>{m.text}</div>;
+                    const mine = m.role === 'user';
+                    return (
+                      <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: mine ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
+                        <div style={{ maxWidth: '86%', padding: '10px 13px', borderRadius: 10, fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', background: mine ? ACCENT : (m.err ? '#FDECEC' : '#F4F4F7'), color: mine ? '#fff' : (m.err ? '#C0392B' : '#2A2A33'), borderBottomRightRadius: mine ? 3 : 10, borderBottomLeftRadius: mine ? 10 : 3 }}>
                           {m.text || ''}
                         </div>
-                      </div>)}
+                        <div style={{ ..._MONO, fontSize: 11, color: '#B6B6BE', marginTop: 4, padding: '0 2px' }}>
+                          {m.err ? <span style={{ color: '#C0392B', marginRight: 6 }}>出错</span> : null}
+                          {m.ts ? (String(m.ts).length > 11 ? String(m.ts).slice(5, 16) : m.ts) : ''}
+                        </div>
+                      </div>);
+                  })}
               </div>
               <div style={{ padding: '10px 20px', borderTop: '1px solid #F1F1F5', fontSize: 12, color: '#A6A8B4', textAlign: 'center' }}>只读 · 创建人视角回看</div>
             </div>)}

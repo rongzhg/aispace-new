@@ -506,6 +506,7 @@ def init_db():
     if empty:
         seed()
     _seed_platform()
+    _seed_sessions()
 
 
 def now():
@@ -543,6 +544,73 @@ def seed():
             )
             c.execute("INSERT INTO versions VALUES (?,?,?,?)",
                       (a["id"], 1, now(), json.dumps(a)))
+
+
+def _seed_sessions():
+    """幂等补充会话 Tab（spec N）演示数据：跨 a1/a2/copilot、多环境/发起人/状态/出错轮，
+    足量以演示分页（>20）与概览统计；另插一条「他人(u9)创建的 Agent」会话，验证创建人隔离不可见。
+    全部按固定 id INSERT OR IGNORE，幂等、不覆盖真实会话。"""
+    # (agent_ref, title, isolation, location, initiator, status, source, version, rounds, err_last)
+    specs = [
+        ("a1", "把访谈记录整理成 PRD 需求项", "L1", "cloud", "u0", "active", "platform", 2, 4, False),
+        ("a1", "电商下单流程的边界场景梳理", "L1", "cloud", "u7", "active", "gateway", 2, 3, False),
+        ("a1", "帮我拆解「智能客服」史诗为用户故事", "L2", "cloud", "u8", "active", "gateway", 2, 5, False),
+        ("a1", "需求优先级排序（MoSCoW）", "L1", "local", "u0", "archived", "platform", 1, 2, False),
+        ("a1", "把这段语音转写整理成需求", "L1", "cloud", "u11", "active", "gateway", 1, 3, False),
+        ("a1", "竞品功能对照表生成", "L2", "cloud", "u7", "failed", "gateway", 2, 2, True),
+        ("a1", "验收标准 EARS 句式改写", "L1", "cloud", "u0", "active", "platform", 2, 4, False),
+        ("a1", "用户旅程地图要点提炼", "L1", "cloud", "u12", "active", "gateway", 1, 3, False),
+        ("a2", "上月 GMV 环比下滑归因分析", "L2", "cloud", "u0", "active", "platform", 1, 5, False),
+        ("a2", "把这张表透视成区域×品类", "L3", "cloud", "u8", "active", "gateway", 1, 3, False),
+        ("a2", "异常订单的离群点检测", "L3", "cloud", "u7", "active", "gateway", 1, 4, False),
+        ("a2", "周活跃留存曲线解读", "L2", "cloud", "u0", "archived", "platform", 1, 2, False),
+        ("a2", "渠道 ROI 对比可视化建议", "L3", "cloud", "u13", "active", "gateway", 1, 3, False),
+        ("a2", "用户分层 RFM 模型测算", "L2", "cloud", "u8", "failed", "gateway", 1, 2, True),
+        ("a2", "把 SQL 结果讲成一段结论", "L3", "cloud", "u0", "active", "cloud-callback", 1, 4, False),
+        ("a2", "大促期间转化漏斗诊断", "L2", "cloud", "u7", "active", "gateway", 1, 5, False),
+        ("copilot", "帮我起草本周项目周报", None, "local", "u0", "active", "platform", None, 3, False),
+        ("copilot", "解释一下 RBAC 和 ABAC 区别", None, "local", "u0", "active", "platform", None, 2, False),
+        ("copilot", "把这段英文邮件润色得正式些", None, "local", "u0", "archived", "platform", None, 2, False),
+        ("copilot", "给新功能想几个命名", None, "local", "u0", "active", "platform", None, 4, False),
+        ("copilot", "正则：匹配中国大陆手机号", None, "local", "u0", "active", "platform", None, 2, False),
+        ("copilot", "整理今天的待办清单", None, "local", "u0", "active", "platform", None, 3, False),
+        ("a1", "把会议纪要转成需求跟踪表", "L1", "cloud", "u0", "active", "platform", 2, 3, False),
+        ("a2", "客单价分布的直方图建议", "L3", "cloud", "u14", "active", "gateway", 1, 4, False),
+    ]
+
+    def _ts_at(base_ts, k):
+        # base_ts 形如 "2026-06-27 22:51:00"，按第 k 条消息加 k 分钟，返回分钟精度时间戳
+        return time.strftime("%Y-%m-%d %H:%M", time.localtime(time.mktime(time.strptime(base_ts, "%Y-%m-%d %H:%M:%S")) + k * 60))
+
+    def _msgs(agent_title, n, err_last, base_ts):
+        out = []
+        def add(m): m["ts"] = _ts_at(base_ts, len(out)); out.append(m)
+        add({"role": "sys", "text": "会话开始"})
+        for i in range(n):
+            add({"role": "user", "text": f"第 {i+1} 轮：{agent_title}（追问 {i+1}）"})
+            if err_last and i == n - 1:
+                add({"role": "assistant", "text": "工具调用超时，本轮执行失败。", "err": True})
+            else:
+                add({"role": "assistant", "text": f"已处理「{agent_title}」第 {i+1} 步，给出阶段性结论。"})
+        return out
+
+    with db() as c:
+        # 重建演示会话行（旧行可能缺 ts 等新字段，先清后插，保证幂等且 schema 最新；不动真实会话）
+        c.execute("DELETE FROM sessions WHERE id LIKE 'sess_seed%'")
+        # 他人(u9)创建的 Agent + 其会话——u0 不应看见（创建人隔离样本）
+        c.execute("INSERT OR IGNORE INTO agents (id,ws_id,name,framework,model,desc,params,files,tools,skills,version,updated_at,deleted,creator) "
+                  "VALUES ('a_other','w1','风控审查助手','CLAUDE_CODE','claude-sonnet-4-6','他人创建，用于隔离验证','{}','{}','[]','[]',1,?,0,'u9')", (now(),))
+        c.execute("INSERT INTO sessions (id,user,agent_ref,title,claude_sid,messages,status,created_at,updated_at,agent_version,isolation,location,initiator,source) "
+                  "VALUES ('sess_seed_other','u9','a_other','他人 Agent 的会话（u0 不可见）',NULL,?,'active',?,?,1,'L2','cloud','u9','gateway')",
+                  (json.dumps(_msgs("风控审查", 3, False, "2026-06-27 12:00:00"), ensure_ascii=False), "2026-06-27 12:00:00", "2026-06-27 12:00:00"))
+        for idx, (ag, title, iso, loc, initiator, status, source, ver, rounds, err) in enumerate(specs):
+            sid = f"sess_seed_{idx:02d}"
+            # 时间递减：idx 越小越新，落在 06-27 当天，保证默认倒序可读
+            ts = f"2026-06-27 {23 - (idx // 2):02d}:{59 - (idx * 4 % 60):02d}:00"
+            c.execute("INSERT INTO sessions (id,user,agent_ref,title,claude_sid,messages,status,created_at,updated_at,agent_version,isolation,location,initiator,source) "
+                      "VALUES (?,?,?,?,NULL,?,?,?,?,?,?,?,?,?)",
+                      (sid, initiator, ag, title, json.dumps(_msgs(title, rounds, err, ts), ensure_ascii=False),
+                       status, ts, ts, ver, iso, loc, initiator, source))
 
 
 # 平台全局项（scope='platform'）的稳定 id
@@ -1305,6 +1373,8 @@ def _sess_append(user, sid, msg):
         if not r:
             return
         msgs = json.loads(r["messages"] or "[]")
+        if "ts" not in msg:
+            msg = {**msg, "ts": now()}    # 每条消息打时间戳（会话明细 QA 展示用）
         msgs.append(msg)
         title = r["title"]
         if (not title or title == "新对话") and msg.get("role") == "user" and (msg.get("text") or "").strip():
@@ -1503,29 +1573,55 @@ def session_list(agent: Optional[str] = None, scope: str = "mine",
       仅含至少 1 轮的会话；支持 agent/isolation/关键词过滤与分页。"""
     user = _copilot_user(x_user)
     if scope == "created":
-        # LEFT JOIN 纳入无 agents 行的 copilot；可见 = 我创建的 Agent 的会话 OR copilot 本人会话
-        sql = ("SELECT s.id,s.agent_ref,s.title,s.updated_at,s.messages,s.status,s.isolation,s.location,s.initiator,"
-               "COALESCE(a.name,'通用助手') AS agent_name "
-               "FROM sessions s LEFT JOIN agents a ON a.id=s.agent_ref "
-               "WHERE ((a.creator=? AND a.deleted=0) OR (s.agent_ref='copilot' AND s.user=?)) "
-               "AND json_array_length(s.messages)>=1")
-        args = [user, user]
-        if agent:
-            sql += " AND s.agent_ref=?"; args.append(agent)
-        if isolation:
-            sql += " AND s.isolation=?"; args.append(isolation)
-        if q:
-            sql += " AND s.title LIKE ?"; args.append(f"%{q}%")
-        sql += " ORDER BY s.updated_at DESC"
+        # LEFT JOIN 纳入无 agents 行的 copilot；可见 = 我创建的 Agent 的会话 OR copilot 本人会话。
+        # 先取「我可见全集」（仅受可见性 + 至少 1 轮约束），据此算 facets（统计/过滤候选），
+        # 再按 agent/isolation/关键词过滤 + 分页——保证概览与下拉候选不随当前过滤/翻页而变。
+        base_sql = ("SELECT s.id,s.agent_ref,s.title,s.updated_at,s.messages,s.status,s.isolation,s.location,s.initiator,"
+                    "COALESCE(a.name,'通用助手') AS agent_name "
+                    "FROM sessions s LEFT JOIN agents a ON a.id=s.agent_ref "
+                    "WHERE ((a.creator=? AND a.deleted=0) OR (s.agent_ref='copilot' AND s.user=?)) "
+                    "AND json_array_length(s.messages)>=1 ORDER BY s.updated_at DESC")
         with db() as c:
-            rows = c.execute(sql, args).fetchall()
+            base = c.execute(base_sql, [user, user]).fetchall()
+
+        def _rounds(msgs):
+            return sum(1 for m in msgs if m.get("role") == "user")
+
+        # 预解析 messages，避免重复 json.loads
+        parsed = [(r, json.loads(r["messages"] or "[]")) for r in base]
+
+        # facets：基于「全集」（未过滤）——概览统计 + Agent 候选 + 环境分布 + 状态分布
+        agent_facet, env_facet, status_facet = {}, {"L1": 0, "L2": 0, "L3": 0, "general": 0}, {}
+        for r, _ in parsed:
+            ag = r["agent_ref"]
+            if ag not in agent_facet:
+                agent_facet[ag] = {"value": ag, "label": r["agent_name"], "count": 0}
+            agent_facet[ag]["count"] += 1
+            env_facet[r["isolation"] if r["isolation"] in ("L1", "L2", "L3") else "general"] += 1
+            st = r["status"] or "—"
+            status_facet[st] = status_facet.get(st, 0) + 1
+        facets = {
+            "totalSessions": len(parsed),
+            "agents": sorted(agent_facet.values(), key=lambda x: (-x["count"], x["label"])),
+            "env": env_facet,
+            "status": status_facet,
+            "activeSessions": status_facet.get("active", 0),
+        }
+
+        # 过滤（agent + isolation + 标题关键词，取交集）
+        ql = (q or "").lower()
+        rows = [(r, msgs) for r, msgs in parsed
+                if (not agent or r["agent_ref"] == agent)
+                and (not isolation or r["isolation"] == isolation)
+                and (not ql or ql in (r["title"] or "").lower())]
         items = [{"id": r["id"], "agent": r["agent_ref"], "agentName": r["agent_name"],
                   "title": r["title"] or "新对话", "isolation": r["isolation"], "location": r["location"],
                   "initiator": r["initiator"], "status": r["status"], "updatedAt": r["updated_at"],
-                  "count": len(json.loads(r["messages"] or "[]"))} for r in rows]
+                  "count": len(msgs), "rounds": _rounds(msgs)} for r, msgs in rows]
         total = len(items)
         start = max(0, page) * max(1, size)
-        return {"total": total, "page": page, "size": size, "items": items[start:start + size]}
+        return {"total": total, "page": page, "size": size,
+                "items": items[start:start + size], "facets": facets}
     # 旧语义
     sql = "SELECT id,agent_ref,title,updated_at,messages FROM sessions WHERE user=?"
     args = [user]
