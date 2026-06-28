@@ -9,6 +9,7 @@ import {
   UserOutlined, TeamOutlined, SendOutlined, ReloadOutlined, ArrowLeftOutlined, DownOutlined,
   RobotOutlined, ToolOutlined, BulbOutlined, CheckOutlined, MessageOutlined, FileTextOutlined,
   SettingOutlined, CloseOutlined, ThunderboltOutlined, SwapOutlined, BranchesOutlined, ExperimentOutlined,
+  MenuFoldOutlined, MenuUnfoldOutlined,
 } from "@ant-design/icons";
 const { Sider, Content } = Layout;
 const { Text } = Typography;
@@ -30,6 +31,7 @@ function Root() {
   const [sort, setSort] = useState('updated');
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [runtimeFilter, setRuntimeFilter] = useState('all');
+  const [siderCollapsed, setSiderCollapsed] = useState(false); // 左侧主导航收起态
   const [createWsOpen, setCreateWsOpen] = useState(false);
   const [newWsName, setNewWsName] = useState('');
   const [apiMode, setApiMode] = useState(false);
@@ -198,24 +200,26 @@ function Root() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider className="ais-sider" width={236} theme="light" style={{ background: '#FAFAFB', borderRight: '1px solid #EBEBF1', padding: '16px 14px', display: 'flex', flexDirection: 'column', position: 'fixed', height: '100vh', left: 0, top: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 6px 16px' }}>
-          <div className="ais-logo-mark" style={{ width: 30, height: 30, borderRadius: 8, background: 'linear-gradient(135deg,#4F46E5,#7A72ED)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 16, boxShadow: '0 2px 7px rgba(79,70,229,0.30)' }}>A</div>
-          <span style={{ fontWeight: 750, fontSize: 16, letterSpacing: -0.2, color: '#17171C' }}>AISpace</span>
+      <Sider className="ais-sider" width={siderCollapsed ? 72 : 236} theme="light" style={{ background: '#FAFAFB', borderRight: '1px solid #EBEBF1', padding: siderCollapsed ? '16px 10px' : '16px 14px', display: 'flex', flexDirection: 'column', position: 'fixed', height: '100vh', left: 0, top: 0, transition: 'width 0.18s ease, padding 0.18s ease', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: siderCollapsed ? 'center' : 'flex-start', gap: 10, padding: siderCollapsed ? '4px 0 16px' : '4px 6px 16px' }}>
+          <div className="ais-logo-mark" style={{ width: 30, height: 30, borderRadius: 8, background: 'linear-gradient(135deg,#4F46E5,#7A72ED)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 16, boxShadow: '0 2px 7px rgba(79,70,229,0.30)', flexShrink: 0 }}>A</div>
+          {!siderCollapsed && <span style={{ fontWeight: 750, fontSize: 16, letterSpacing: -0.2, color: '#17171C' }}>AISpace</span>}
         </div>
 
-        <div style={{ fontSize: 10.5, fontWeight: 600, color: '#A6A8B4', letterSpacing: 0.6, padding: '0 6px 8px' }}>工作空间</div>
+        {!siderCollapsed && <div style={{ fontSize: 10.5, fontWeight: 600, color: '#A6A8B4', letterSpacing: 0.6, padding: '0 6px 8px' }}>工作空间</div>}
         <Dropdown trigger={['click']} menu={{
           items: [...workspaces.map(w => ({ key: w.id, label: w.name, icon: w.id === curWs ? <CheckOutlined style={{ color: ACCENT }} /> : <span style={{ display: 'inline-block', width: 14 }} /> })), ...(isPlatformAdmin ? [{ type: 'divider' }, { key: '__new', label: '新建项目空间', icon: <PlusOutlined /> }] : [])],
           onClick: ({ key }) => key === '__new' ? setCreateWsOpen(true) : switchWs(key),
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', border: '1px solid #E7E7EC', borderRadius: 8, background: '#fff', cursor: 'pointer', marginBottom: 16 }}>
-            <Space size={8}><AppstoreOutlined style={{ color: ACCENT }} /><span style={{ fontSize: 13.5, fontWeight: 600 }}>{ws.name}</span></Space>
-            <DownOutlined style={{ fontSize: 10, color: '#A6A8B4' }} />
-          </div>
+          <Tooltip title={siderCollapsed ? ws.name : ''} placement="right">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: siderCollapsed ? 'center' : 'space-between', padding: siderCollapsed ? '8px 0' : '8px 12px', border: '1px solid #E7E7EC', borderRadius: 8, background: '#fff', cursor: 'pointer', marginBottom: 16 }}>
+              <Space size={8}><AppstoreOutlined style={{ color: ACCENT }} />{!siderCollapsed && <span style={{ fontSize: 13.5, fontWeight: 600 }}>{ws.name}</span>}</Space>
+              {!siderCollapsed && <DownOutlined style={{ fontSize: 10, color: '#A6A8B4' }} />}
+            </div>
+          </Tooltip>
         </Dropdown>
 
-        <Menu mode="inline" selectedKeys={[nav]} style={{ background: 'transparent', border: 'none', flex: 1 }}
+        <Menu mode="inline" inlineCollapsed={siderCollapsed} selectedKeys={[nav]} style={{ background: 'transparent', border: 'none', flex: 1 }}
           onClick={({ key }) => { setNav(key); setView({ name: 'list' }); }}
           items={[
             { key: 'chat', icon: <MessageOutlined />, label: 'Chat' },
@@ -230,20 +234,25 @@ function Root() {
             { key: 'members', icon: <TeamOutlined />, label: '成员与权限' },
           ]} />
 
-        {apiMode && (
+        {apiMode && !siderCollapsed && (
           <Popconfirm title="停止所有正在运行的 Agent 服务？" description="含后端重启遗留的孤儿进程" onConfirm={async () => { try { const r = await apiCall('/api/services/stop-all', { method: 'POST' }); message.success(`已停止 ${r.stopped} 个服务`); loadServices(); } catch (e) { message.error(e.message); } }}>
             <Button size="small" danger block style={{ marginBottom: 10 }}>停止所有 Agent 服务</Button>
           </Popconfirm>
         )}
-        <div style={{ borderTop: '1px solid #EBEBF1', paddingTop: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11.5, color: '#A6A8B4' }}>
-          <span>Demo · 免登录</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 6, height: 6, borderRadius: 3, background: apiMode ? '#34C759' : '#C9CAD6', display: 'inline-block' }} />{apiMode ? '后端已连接' : '本地 mock'}</span>
+        <div style={{ borderTop: '1px solid #EBEBF1', paddingTop: 14, display: 'flex', alignItems: 'center', justifyContent: siderCollapsed ? 'center' : 'space-between', fontSize: 11.5, color: '#A6A8B4' }}>
+          {!siderCollapsed && <span>Demo · 免登录</span>}
+          <Tooltip title={siderCollapsed ? (apiMode ? '后端已连接' : '本地 mock') : ''} placement="right">
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 6, height: 6, borderRadius: 3, background: apiMode ? '#34C759' : '#C9CAD6', display: 'inline-block' }} />{!siderCollapsed && (apiMode ? '后端已连接' : '本地 mock')}</span>
+          </Tooltip>
         </div>
       </Sider>
 
-      <Layout style={{ marginLeft: 236, background: '#f6f7f9' }}>
+      <Layout style={{ marginLeft: siderCollapsed ? 72 : 236, background: '#f6f7f9', transition: 'margin-left 0.18s ease' }}>
         <div className="ais-topbar" style={{ height: 56, borderBottom: '1px solid #EFEFF2', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px', position: 'sticky', top: 0, background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', zIndex: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 13.5 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13.5 }}>
+            <Tooltip title={siderCollapsed ? '展开导航' : '收起导航'}>
+              <Button type="text" icon={siderCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} onClick={() => setSiderCollapsed(c => !c)} style={{ color: '#64748B', marginLeft: -8 }} />
+            </Tooltip>
             <AppstoreOutlined style={{ color: '#A6A8B4', fontSize: 14 }} />
             <span style={{ color: '#8A8C99' }}>{ws.name}</span>
             <span style={{ color: '#D0D0D8' }}>/</span>

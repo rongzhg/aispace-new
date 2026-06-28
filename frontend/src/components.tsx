@@ -9,7 +9,7 @@ import {
   UserOutlined, TeamOutlined, SendOutlined, ReloadOutlined, ArrowLeftOutlined, DownOutlined,
   RobotOutlined, ToolOutlined, BulbOutlined, CheckOutlined, MessageOutlined, FileTextOutlined,
   SettingOutlined, CloseOutlined, ThunderboltOutlined, SwapOutlined, BranchesOutlined,
-  InboxOutlined, FolderOutlined, FileOutlined, EyeOutlined,
+  InboxOutlined, FolderOutlined, FileOutlined, EyeOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
 } from "@ant-design/icons";
 const { Sider, Content } = Layout;
 const { Text } = Typography;
@@ -196,6 +196,8 @@ export function AssetDrawer({ open, type, selected, onClose, onConfirm, wsId }) 
   );
 }
 export const pill = (bg, color) => ({ background: bg, color, fontSize: 11, padding: '1px 8px', borderRadius: 6, fontWeight: 600 });
+// 会话消息的时间戳（后端/前端均以 now() = 'YYYY-MM-DD HH:mm' 落库）→ QA 气泡下只显示 HH:mm
+export const msgTime = ts => (ts || '').slice(11, 16);
 
 /* ================= 调试面板 (Spec I · mock) ================= */
 export function DebugPanel({ cfg, chatPath, streamPath, initialMsgs, onTurn }) {
@@ -207,17 +209,17 @@ export function DebugPanel({ cfg, chatPath, streamPath, initialMsgs, onTurn }) {
   const send = async () => {
     if (!input.trim() || busy) return;
     const q = input.trim();
-    setMsgs(m => [...m, { role: 'user', text: q }]);
+    setMsgs(m => [...m, { role: 'user', text: q, ts: now() }]);
     setInput('');
     if (!API_ON) {
       const toolNote = (cfg.tools && cfg.tools.length) ? `（可调用 ${cfg.tools.length} 个工具）` : '';
-      setMsgs(m => [...m, { role: 'bot', text: `「${cfg.name || '未命名 Agent'}」${toolNote}收到：${q}\n\n这是基于当前配置的模拟回复（连上后端即真实运行）。` }]);
+      setMsgs(m => [...m, { role: 'bot', text: `「${cfg.name || '未命名 Agent'}」${toolNote}收到：${q}\n\n这是基于当前配置的模拟回复（连上后端即真实运行）。`, ts: now() }]);
       return;
     }
     setBusy(true);
     if (streamPath) {
       // 协议2：SSE 流式
-      setMsgs(m => [...m, { role: 'bot', text: '', pending: true }]);
+      setMsgs(m => [...m, { role: 'bot', text: '', pending: true, ts: now() }]);
       try {
         const resp = await fetch(API_BASE + streamPath, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: q, session_id: sid }) });
         const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf = ''; let acc = '';
@@ -241,13 +243,13 @@ export function DebugPanel({ cfg, chatPath, streamPath, initialMsgs, onTurn }) {
       return;
     }
     // 协议1：一次性 JSON
-    setMsgs(m => [...m, { role: 'bot', text: '运行中…', pending: true }]);
+    setMsgs(m => [...m, { role: 'bot', text: '运行中…', pending: true, ts: now() }]);
     try {
       const d = await apiCall(chatPath || `/api/agents/${cfg.id || 'new'}/chat`, { method: 'POST', body: JSON.stringify({ message: q, config: cfg, session_id: sid }) });
       if (d.session_id) setSid(d.session_id);
-      setMsgs(m => m.filter(x => !x.pending).concat({ role: 'bot', text: d.reply || '(空响应)', err: d.engine === 'error' }));
+      setMsgs(m => m.filter(x => !x.pending).concat({ role: 'bot', text: d.reply || '(空响应)', err: d.engine === 'error', ts: now() }));
     } catch (e) {
-      setMsgs(m => m.filter(x => !x.pending).concat({ role: 'bot', text: '调用失败：' + e.message, err: true }));
+      setMsgs(m => m.filter(x => !x.pending).concat({ role: 'bot', text: '调用失败：' + e.message, err: true, ts: now() }));
     } finally { setBusy(false); onTurn && onTurn(); }
   };
   return (
@@ -257,7 +259,7 @@ export function DebugPanel({ cfg, chatPath, streamPath, initialMsgs, onTurn }) {
         {msgs.map((m, i) => m.role === 'sys' ? (
           <div key={i} style={{ textAlign: 'center', fontSize: 12, color: '#8A8C99', margin: '8px 0 16px' }}>{m.text}</div>
         ) : (
-          <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
             <div style={{
               maxWidth: '82%', padding: '10px 13px', borderRadius: 12, fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap',
               background: m.role === 'user' ? ACCENT : '#F4F4F7', color: m.role === 'user' ? '#fff' : (m.err ? '#D4380D' : '#2A2A33'),
@@ -267,6 +269,7 @@ export function DebugPanel({ cfg, chatPath, streamPath, initialMsgs, onTurn }) {
                 ? <span style={{ display: 'inline-flex', alignItems: 'center' }} aria-label="正在回复"><span className="pg-dot" style={{ animationDelay: '0s' }} /><span className="pg-dot" style={{ animationDelay: '.18s' }} /><span className="pg-dot" style={{ animationDelay: '.36s' }} /></span>
                 : <>{m.text}{m.role === 'bot' && m.pending ? <span className="pg-caret">▋</span> : null}</>}
             </div>
+            {msgTime(m.ts) && <div style={{ fontSize: 11, color: '#B0B3BE', margin: '4px 2px 0' }}>{msgTime(m.ts)}</div>}
           </div>
         ))}
       </div>
@@ -1171,6 +1174,7 @@ export function Playground({ agents, embedded }) {
   const [psid, setPsid] = useState(null);       // 当前会话（我方 sid）；L3 即按它在云端粘一个专属沙箱
   const [pgSessions, setPgSessions] = useState([]); // 选中 agent 名下的会话列表
   const [pgMsgs, setPgMsgs] = useState([]);      // 当前会话历史（喂给 DebugPanel 回显）
+  const [pgRailCollapsed, setPgRailCollapsed] = useState(false); // 会话列表收起态
   const [svcMap, setSvcMap] = useState({});      // agentId → 运行态（隔离级别 / local|cloud / status）
   const loadSvc = () => { if (API_ON) apiCall('/api/services').then(d => setSvcMap(Object.fromEntries((d || []).map(s => [s.agentId || s.id, s])))).catch(() => {}); };
   // 会话管理（统一 /api/sessions，按 agent 过滤）——切 tab 回来即由此重载、回显
@@ -1270,29 +1274,41 @@ export function Playground({ agents, embedded }) {
         ? <div className="playground-empty"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有已发布的 Agent —— 去详情或编辑页点「发布」" /></div>
         : <div className="playground-frame" style={{ display: 'flex', gap: 16, alignItems: 'stretch' }}>
             {cfg && (
-              <div className="playground-session-rail" style={{ width: 224, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
-                <div className="playground-session-toolbar">
-                  <div>
-                    <div className="playground-session-label">会话</div>
-                    <div className="playground-session-count">{pgSessions.length} 条</div>
+              <div className={'playground-session-rail' + (pgRailCollapsed ? ' is-collapsed' : '')}>
+                {pgRailCollapsed ? (
+                  <div className="session-rail-collapsed">
+                    <Tooltip title="展开会话列表" placement="right"><Button type="text" size="small" icon={<MenuUnfoldOutlined />} onClick={() => setPgRailCollapsed(false)} /></Tooltip>
+                    <Tooltip title="新建会话" placement="right"><Button type="text" size="small" icon={<PlusOutlined />} onClick={() => sel && newPgSession(sel.id, { reuseEmpty: true })} /></Tooltip>
                   </div>
-                  <Button size="small" icon={<PlusOutlined />} onClick={() => sel && newPgSession(sel.id, { reuseEmpty: true })}>新建</Button>
-                </div>
-                <div className="playground-session-list" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-                  {pgSessions.length === 0
-                    ? <div style={{ textAlign: 'center', color: '#C2C4CE', fontSize: 12, padding: '16px 0' }}>暂无会话</div>
-                    : pgSessions.map(s => (
-                      <div key={s.id} className={'playground-session-item' + (s.id === psid ? ' is-active' : '')} onClick={() => switchPgSession(s.id)}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12.5, color: s.id === psid ? ACCENT : '#334155', fontWeight: s.id === psid ? 650 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title || '新对话'}</div>
-                          <div style={{ fontSize: 11, color: '#A6A8B4' }}>{s.count || 0} 条</div>
+                ) : (
+                  <>
+                    <div className="playground-session-toolbar">
+                      <div className="session-toolbar-row">
+                        <div>
+                          <div className="playground-session-label">会话</div>
+                          <div className="playground-session-count">{pgSessions.length} 条</div>
                         </div>
-                        <Popconfirm title="删除该会话？" okText="删除" okButtonProps={{ danger: true }} cancelText="取消" onConfirm={() => delPgSession(s.id)}>
-                          <DeleteOutlined onClick={e => e.stopPropagation()} style={{ fontSize: 12, color: '#C0C2CC', flexShrink: 0 }} />
-                        </Popconfirm>
+                        <Tooltip title="收起会话列表"><Button type="text" size="small" icon={<MenuFoldOutlined />} onClick={() => setPgRailCollapsed(true)} /></Tooltip>
                       </div>
-                    ))}
-                </div>
+                      <Button className="session-new-btn" block icon={<PlusOutlined />} style={{ color: ACCENT, borderColor: '#dbe1ea' }} onClick={() => sel && newPgSession(sel.id, { reuseEmpty: true })}>新建会话</Button>
+                    </div>
+                    <div className="playground-session-list">
+                      {pgSessions.length === 0
+                        ? <div style={{ textAlign: 'center', color: '#C2C4CE', fontSize: 12, padding: '16px 0' }}>暂无会话</div>
+                        : pgSessions.map(s => (
+                          <div key={s.id} className={'playground-session-item' + (s.id === psid ? ' is-active' : '')} onClick={() => switchPgSession(s.id)}>
+                            <div className="session-item-title">{s.title || '新对话'}</div>
+                            <div className="session-item-meta">{s.updatedAt ? s.updatedAt + ' · ' : ''}{s.count || 0} 条</div>
+                            <div className="session-item-actions">
+                              <Popconfirm title="删除该会话？" okText="删除" okButtonProps={{ danger: true }} cancelText="取消" onConfirm={() => delPgSession(s.id)}>
+                                <DeleteOutlined onClick={e => e.stopPropagation()} />
+                              </Popconfirm>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </>
+                )}
               </div>
             )}
             <div className="playground-main" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
@@ -1333,7 +1349,8 @@ export function ChatPanel({ curWs, isAdmin, onChanged }) {
   const [sessions, setSessions] = useState([]);      // 会话历史（按用户）
   const [curSid, setCurSid] = useState(null);        // 当前会话 id（我方）；claude 续接 token 由后端持有
   const [renaming, setRenaming] = useState(null);    // 重命名中：{id, title}
-  const push = (role, text) => setMsgs(m => [...m, { role, text }]);
+  const [railCollapsed, setRailCollapsed] = useState(false); // 会话列表收起态
+  const push = (role, text, extra) => setMsgs(m => [...m, { role, text, ts: now(), ...(extra || {}) }]);
   // 增量更新最后一条 bot 气泡（流式）
   const setBot = (text, extra) => setMsgs(m => { const c = [...m]; for (let i = c.length - 1; i >= 0; i--) { if (c[i].role === 'bot') { c[i] = { ...c[i], text, ...(extra || {}) }; break; } } return c; });
 
@@ -1538,30 +1555,42 @@ export function ChatPanel({ curWs, isAdmin, onChanged }) {
       </div>
       <div className="chat-frame" style={{ background: '#fff', border: '1px solid #dfe3ea', borderRadius: 6, display: 'flex', overflow: 'hidden' }}>
         {/* 会话侧栏：新建 / 切换 / 删除 / 历史 */}
-        <div className="chat-session-rail" style={{ width: 210, borderRight: '1px solid #dfe3ea', display: 'flex', flexDirection: 'column', background: '#f8fafc' }}>
-          <div className="chat-session-toolbar">
-            <div>
-              <div className="chat-session-label">会话</div>
-              <div className="chat-session-count">{sessions.length} 条</div>
+        <div className={'chat-session-rail' + (railCollapsed ? ' is-collapsed' : '')}>
+          {railCollapsed ? (
+            <div className="session-rail-collapsed">
+              <Tooltip title="展开会话列表" placement="right"><Button type="text" size="small" icon={<MenuUnfoldOutlined />} onClick={() => setRailCollapsed(false)} /></Tooltip>
+              <Tooltip title="新建会话" placement="right"><Button type="text" size="small" icon={<PlusOutlined />} onClick={newSession} /></Tooltip>
             </div>
-            <Button size="small" icon={<PlusOutlined />} onClick={newSession}>新建</Button>
-          </div>
-          <div style={{ flex: 1, overflow: 'auto', padding: '0 6px 8px' }}>
-            {sessions.length === 0
-              ? <div style={{ textAlign: 'center', color: '#C2C4CE', fontSize: 12, padding: '24px 0' }}>暂无会话</div>
-              : sessions.map(s => (
-                <div key={s.id} className={'chat-session-item' + (s.id === curSid ? ' is-active' : '')} onClick={() => switchSession(s.id)} style={{ padding: '8px 9px', borderRadius: 5, cursor: 'pointer', marginBottom: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, color: s.id === curSid ? ACCENT : '#334155', fontWeight: s.id === curSid ? 650 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title || '新对话'}</div>
-                    <div style={{ fontSize: 11, color: '#A6A8B4', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.updatedAt || ''} · {s.count || 0} 条</div>
+          ) : (
+            <>
+              <div className="chat-session-toolbar">
+                <div className="session-toolbar-row">
+                  <div>
+                    <div className="chat-session-label">会话</div>
+                    <div className="chat-session-count">{sessions.length} 条</div>
                   </div>
-                  <Tooltip title="重命名"><EditOutlined onClick={e => { e.stopPropagation(); setRenaming({ id: s.id, title: s.title || '' }); }} style={{ fontSize: 12, color: '#C0C2CC', flexShrink: 0 }} /></Tooltip>
-                  <Popconfirm title="删除该会话？" okText="删除" okButtonProps={{ danger: true }} cancelText="取消" onConfirm={() => delSession(s.id)}>
-                    <DeleteOutlined onClick={e => e.stopPropagation()} style={{ fontSize: 12, color: '#C0C2CC', flexShrink: 0 }} />
-                  </Popconfirm>
+                  <Tooltip title="收起会话列表"><Button type="text" size="small" icon={<MenuFoldOutlined />} onClick={() => setRailCollapsed(true)} /></Tooltip>
                 </div>
-              ))}
-          </div>
+                <Button className="session-new-btn" block icon={<PlusOutlined />} style={{ color: ACCENT, borderColor: '#dbe1ea' }} onClick={newSession}>新建会话</Button>
+              </div>
+              <div style={{ flex: 1, overflow: 'auto', padding: '6px 6px 8px' }}>
+                {sessions.length === 0
+                  ? <div style={{ textAlign: 'center', color: '#C2C4CE', fontSize: 12, padding: '24px 0' }}>暂无会话</div>
+                  : sessions.map(s => (
+                    <div key={s.id} className={'chat-session-item' + (s.id === curSid ? ' is-active' : '')} onClick={() => switchSession(s.id)}>
+                      <div className="session-item-title">{s.title || '新对话'}</div>
+                      <div className="session-item-meta">{s.updatedAt ? s.updatedAt + ' · ' : ''}{s.count || 0} 条</div>
+                      <div className="session-item-actions">
+                        <Tooltip title="重命名"><EditOutlined onClick={e => { e.stopPropagation(); setRenaming({ id: s.id, title: s.title || '' }); }} /></Tooltip>
+                        <Popconfirm title="删除该会话？" okText="删除" okButtonProps={{ danger: true }} cancelText="取消" onConfirm={() => delSession(s.id)}>
+                          <DeleteOutlined onClick={e => e.stopPropagation()} />
+                        </Popconfirm>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </>
+          )}
         </div>
         {/* 对话区 */}
         <div className="chat-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
@@ -1577,10 +1606,11 @@ export function ChatPanel({ curWs, isAdmin, onChanged }) {
             )}
             {msgs.map((m, i) => m.role === 'sys'
               ? <div key={i} style={{ textAlign: 'center', fontSize: 12, color: '#A6A8B4', margin: '6px 0 14px' }}>{m.text}</div>
-              : <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
+              : <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
                   <div style={{ maxWidth: '82%', padding: '10px 13px', borderRadius: 12, fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', background: m.role === 'user' ? ACCENT : (m.err ? '#FDECEC' : '#F4F4F7'), color: m.role === 'user' ? '#fff' : (m.err ? '#B42318' : '#2A2A33'), borderBottomRightRadius: m.role === 'user' ? 3 : 12, borderBottomLeftRadius: m.role === 'bot' ? 3 : 12 }}>
                     {m.text || (m.pending ? <span style={{ color: '#8A8C99' }}><Spin size="small" style={{ marginRight: 8 }} />通用 Agent 思考中…</span> : '')}
                   </div>
+                  {msgTime(m.ts) && <div style={{ fontSize: 11, color: '#B0B3BE', margin: '4px 2px 0' }}>{msgTime(m.ts)}</div>}
                 </div>)}
           </div>
           <div className="chat-composer" style={{ position: 'relative' }}>
