@@ -1,8 +1,8 @@
 ---
 name: 项目空间
-last amended: 2026-06-24
-version: 1
-description: 项目空间（工作空间）的创建、查询、成员管理（多 Owner）、当前空间上下文与切换
+last amended: 2026-06-28
+version: 2
+description: 项目空间（工作空间）的创建、查询、成员管理（多 Owner）、当前空间上下文与侧边栏切换
 ---
 
 # 项目空间 Feature Specification
@@ -26,7 +26,7 @@ description: 项目空间（工作空间）的创建、查询、成员管理（�
 
 #### Acceptance Criteria
 1. WHERE 当前用户为平台管理员 系统 SHALL 展示「新建项目空间」入口；非管理员 SHALL NOT 看到该入口
-2. WHEN 管理员点击"新建项目空间" THEN 系统 SHALL 弹出表单，要求填写空间名称（必填）及描述（选填）
+2. WHEN 管理员点击"新建项目空间" THEN 系统 SHALL 弹出表单，要求填写空间名称（必填）；空间描述为后续能力，不属于 MVP 必填项
 3. WHEN 管理员提交合法表单 THEN 系统 SHALL 创建空间，并将其设为该空间 Owner
 4. IF 空间名称为空或不合法 THEN 系统 SHALL 阻止提交并行内提示
 5. IF 非管理员尝试创建（如直接调接口）THEN 系统 SHALL 拒绝
@@ -34,7 +34,7 @@ description: 项目空间（工作空间）的创建、查询、成员管理（�
 
 #### 引用 / 影响
 - 术语：Workspace, Owner, PlatformAdmin
-- 组件：Modal、Form、Input；入口按平台管理员显示
+- 组件：Modal、Input；入口按平台管理员显示
 - 现有功能：与 J（角色/默认空间）、H（资产归属空间）联动；创建空间须校验平台管理员
 
 #### 设计决策
@@ -50,8 +50,8 @@ description: 项目空间（工作空间）的创建、查询、成员管理（�
 **User Story:** 作为用户，我希望查看我所属的项目空间列表，以便在其中切换与管理。
 
 #### Acceptance Criteria
-1. WHEN 用户打开空间列表 THEN 系统 SHALL 展示其所属的全部空间：名称、我的角色（Owner/Member）、成员数、最后活跃时间
-2. WHEN 用户搜索空间名称 THEN 系统 SHALL 实时过滤
+1. WHEN 用户打开空间切换器 THEN 系统 SHALL 展示其所属的全部空间名称，并标识当前空间
+2. WHERE 当前用户为平台管理员 系统 SHALL 在空间切换器底部展示「新建项目空间」入口
 3. WHERE 平台管理员 系统 SHALL 可查询全平台所有空间（见 Spec J）
 
 #### 引用 / 影响
@@ -59,7 +59,7 @@ description: 项目空间（工作空间）的创建、查询、成员管理（�
 - 组件：Table/List、Input.Search、Tag
 
 #### 待确认 / 假设
-- ❓列表是独立页还是在空间切换器内承载
+- 已定：MVP 在侧边栏空间切换器内承载；独立空间管理页后续再做
 
 ---
 
@@ -89,14 +89,14 @@ description: 项目空间（工作空间）的创建、查询、成员管理（�
 
 #### Acceptance Criteria
 1. WHILE 用户已登录 系统 SHALL 始终处于某个"当前空间"上下文；首次进入默认选中其默认空间
-2. WHERE 全局导航 系统 SHALL 提供空间切换器，展示当前空间并可切换至其所属的其他空间
+2. WHERE 左侧导航顶部 系统 SHALL 提供空间切换器，展示当前空间并可切换至其所属的其他空间
 3. WHEN 用户切换当前空间 THEN 系统 SHALL 使后续所有操作（Agent 列表、资产选择、创建等）作用于新当前空间
 4. WHERE 所有资产相关操作 系统 SHALL 限定在当前空间范围内（Agent、工具、技能均按当前空间过滤）
 5. WHERE demo 阶段 系统 MAY 仅含默认空间，切换器可展示但不强求多空间
 
 #### 引用 / 影响
 - 术语：Workspace
-- 组件：全局 Header 空间切换器（Select/Dropdown）
+- 组件：左侧导航空间切换器（Select/Dropdown）
 - 现有功能：是 A（Agent 列表）、D/E（资产选择）、H（权限）的作用域上下文
 
 #### 设计决策

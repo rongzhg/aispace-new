@@ -58,11 +58,11 @@ description: <一句话说明这块功能干什么>
 每条 Acceptance Criteria 应能直接映射成一个测试用例。示例：
 
 ```
-SHALL: WHEN 用户填写完所有必填项并点击保存 THEN 系统 SHALL 创建 Agent 及其初始版本(v1)，并导航回 Agent 列表
+SHALL: WHEN 用户填写完所有必填项并点击「创建 Agent」 THEN 系统 SHALL 创建 Agent 及其初始版本(v1)，并停留在 Agent 工作台
 ↓
-test('保存后创建 Agent 并生成 v1，跳转列表', ...)
-  - 填必填项 → 点保存
-  - 断言：列表出现该 Agent、版本=v1、当前路由=列表页
+test('创建 Agent 后生成 v1 并停留工作台', ...)
+  - 填必填项 → 点创建 Agent
+  - 断言：工作台展示该 Agent、Head=v1、Live=未发布
 ```
 
 开发/AI 自动迭代的收敛信号就来自这些测试全绿。详见 `dod.md`。
@@ -71,18 +71,18 @@ test('保存后创建 Agent 并生成 v1，跳转列表', ...)
 
 ```
 ### Requirement: 创建 Agent
-**User Story:** 作为项目成员，我希望通过分步表单创建新的 Agent，并根据框架类型配置差异化的配置文件，以便定义 Agent 的行为和能力。
+**User Story:** 作为项目成员，我希望通过 Agent 工作台创建新的 Agent，并根据框架类型配置差异化的配置文件，以便定义 Agent 的行为和能力。
 
 #### Acceptance Criteria
 1. WHEN 用户点击"创建 Agent"按钮 THEN 系统 SHALL 导航至 Agent 创建页面
-2. WHEN 用户进入创建页面 THEN 系统 SHALL 展示四个框架卡片：Claude Code(可选)、OpenClaw(可选)、Custom(禁用,标注"coming soon")、Hermes(禁用)
-3. WHERE 框架为 Claude Code 系统 SHALL 展示：基本信息(名称必填,2-50字符;描述选填)、配置编辑器、工具选择、技能选择、配置预览
-4. WHEN 用户填完必填项并点击保存 THEN 系统 SHALL 创建 Agent 及初始版本(v1)并导航回列表
+2. WHEN 用户进入创建页面 THEN 系统 SHALL 在工作台元信息区展示紧凑框架选择控件：Claude Code(可选)、OpenClaw(可选)、Custom(禁用,标注"coming soon")、Hermes(禁用)
+3. WHERE 框架为 Claude Code 系统 SHALL 展示：基本信息(名称必填,2-50字符;描述选填)、配置编辑器、工具选择、技能选择、试跑
+4. WHEN 用户填完必填项并点击「创建 Agent」 THEN 系统 SHALL 创建 Agent 及初始版本(v1)并停留工作台
 5. WHILE Agent 名称已创建 系统 SHALL 禁止修改该名称
 
 #### 引用 / 影响
 - 术语：Agent, Framework, ConfigFile, Version, Tool, Skill, ConfigPreview
-- 组件：StepForm、FrameworkCard、MonacoEditor、Drawer、Collapse
+- 组件：AgentWorkbench、Segmented、MonospaceEditor、Drawer
 - 现有功能：新增，无冲突
 
 #### 待确认 / 假设

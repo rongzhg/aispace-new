@@ -9,336 +9,730 @@
 <x-dc>
 <helmet>
 <style>
-  body { margin:0; background:#FAFAFB; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  :root {
+    --ink-900:#0f172a;
+    --ink-850:#111827;
+    --ink-700:#334155;
+    --ink-650:#475569;
+    --ink-500:#64748b;
+    --ink-350:#94a3b8;
+    --line-strong:#dfe3ea;
+    --line:#e2e8f0;
+    --line-soft:#edf0f4;
+    --surface-page:#f6f7f9;
+    --surface-rail:#f8fafc;
+    --surface-raised:#ffffff;
+    --surface-muted:#f1f5f9;
+    --accent:#2563eb;
+    --accent-strong:#1d4ed8;
+    --accent-soft:#eef2ff;
+    --accent-soft-2:#eef0ff;
+    --success:#047857;
+    --success-soft:#ecfdf5;
+    --warning:#b45309;
+    --warning-soft:#fffbeb;
+    --danger:#dc2626;
+    --danger-soft:#fee2e2;
+  }
+  html, body { margin:0; background:var(--surface-page); color:var(--ink-850); -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
   * { box-sizing:border-box; }
+  body { font-family:Inter,-apple-system,"PingFang SC","Microsoft YaHei",Segoe UI,sans-serif; font-size:13px; letter-spacing:0; font-variant-numeric:tabular-nums; }
+  .doc { min-height:100vh; padding:34px 24px 72px; }
+  .wrap { max-width:1180px; margin:0 auto; }
+  .cover { display:grid; grid-template-columns:1fr 320px; gap:24px; align-items:end; margin-bottom:18px; }
+  .brand { display:flex; align-items:center; gap:12px; margin-bottom:18px; }
+  .mark { width:34px; height:34px; border-radius:6px; background:var(--ink-850); color:#fff; display:flex; align-items:center; justify-content:center; font-size:17px; font-weight:800; }
+  .brand-title { color:var(--ink-900); font-size:16px; font-weight:760; line-height:1.2; }
+  .brand-sub { margin-top:3px; color:var(--ink-350); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+  h1 { margin:0; color:var(--ink-900); font-size:36px; line-height:1.08; font-weight:780; letter-spacing:-.02em; }
+  .lead { max-width:760px; margin:12px 0 0; color:var(--ink-500); font-size:14px; line-height:1.72; }
+  .meta-box { border:1px solid var(--line-strong); border-radius:6px; background:var(--surface-raised); padding:14px; }
+  .meta-row { display:flex; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px solid var(--line-soft); color:var(--ink-500); font-size:12px; }
+  .meta-row:last-child { border-bottom:0; }
+  .mono { font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; }
+  .toc { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; margin:18px 0 24px; }
+  .toc span { border:1px solid var(--line-strong); border-radius:5px; background:var(--surface-raised); padding:8px 10px; color:var(--ink-650); font-size:12px; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  section { border:1px solid var(--line-strong); border-radius:6px; background:var(--surface-raised); margin-bottom:14px; padding:22px; }
+  .sec-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:16px; }
+  .eyebrow { color:var(--ink-350); font-size:10.5px; font-weight:760; letter-spacing:.08em; text-transform:uppercase; }
+  h2 { margin:4px 0 0; color:var(--ink-900); font-size:19px; line-height:1.2; font-weight:760; letter-spacing:-.01em; }
+  .sec-copy { max-width:720px; margin:5px 0 0; color:var(--ink-500); font-size:12.5px; line-height:1.65; }
+  .tag { display:inline-flex; align-items:center; min-height:22px; padding:2px 7px; border-radius:4px; background:var(--surface-muted); color:var(--ink-650); font-size:11.5px; font-weight:700; }
+  .tag-blue { background:var(--accent-soft-2); color:#4f46e5; }
+  .tag-ok { background:var(--success-soft); color:var(--success); }
+  .tag-warn { background:var(--warning-soft); color:var(--warning); }
+  .tag-danger { background:var(--danger-soft); color:var(--danger); }
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .grid-3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+  .grid-4 { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+  .card { border:1px solid var(--line); border-radius:6px; background:#fff; padding:14px; }
+  .card-title { color:var(--ink-900); font-size:12.5px; font-weight:760; margin-bottom:8px; }
+  .card-copy { color:var(--ink-500); font-size:12px; line-height:1.65; }
+  .token-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:9px; }
+  .swatch { overflow:hidden; border:1px solid var(--line); border-radius:6px; background:#fff; }
+  .swatch-color { height:46px; border-bottom:1px solid var(--line-soft); }
+  .swatch-body { padding:8px 9px; }
+  .swatch-code { color:var(--ink-900); font-size:11.5px; font-weight:760; }
+  .swatch-label { margin-top:3px; color:var(--ink-350); font-size:11px; line-height:1.3; }
+  table { width:100%; border-collapse:separate; border-spacing:0; overflow:hidden; border:1px solid var(--line); border-radius:6px; font-size:12px; }
+  th { padding:9px 10px; border-bottom:1px solid var(--line-strong); background:var(--surface-rail); color:var(--ink-500); text-align:left; font-size:11px; font-weight:760; letter-spacing:.04em; text-transform:uppercase; }
+  td { padding:9px 10px; border-bottom:1px solid var(--line-soft); color:var(--ink-650); vertical-align:top; line-height:1.55; }
+  tr:last-child td { border-bottom:0; }
+  .spec-list { margin:0; padding-left:18px; color:var(--ink-650); line-height:1.75; font-size:12.5px; }
+  .spec-list li { margin:2px 0; }
+  .rule { border-top:1px solid var(--line-soft); margin:16px 0; }
+  .button-row, .chip-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .btn { height:30px; display:inline-flex; align-items:center; justify-content:center; padding:0 12px; border-radius:5px; border:1px solid var(--line-strong); background:#fff; color:var(--ink-850); font-size:13px; font-weight:600; }
+  .btn-primary { background:var(--ink-900); border-color:var(--ink-900); color:#fff; }
+  .btn-text { border-color:transparent; background:transparent; color:var(--accent); }
+  .btn-danger { border-color:transparent; background:transparent; color:var(--danger); }
+  .input { height:30px; display:inline-flex; align-items:center; min-width:210px; padding:0 10px; border:1px solid var(--line-strong); border-radius:5px; background:#fff; color:var(--ink-350); font-size:12.5px; }
+  .seg { display:inline-flex; gap:2px; padding:2px; border-radius:5px; background:var(--surface-muted); }
+  .seg span { padding:4px 10px; border-radius:4px; color:var(--ink-500); font-size:12px; }
+  .seg .on { background:#fff; color:var(--ink-900); font-weight:650; box-shadow:0 1px 1px rgba(15,23,42,.06); }
+  .preview-shell { border:1px solid var(--line-strong); border-radius:6px; overflow:hidden; background:#fff; }
+  .topbar { height:48px; display:flex; align-items:center; justify-content:space-between; padding:0 24px; border-bottom:1px solid var(--line-strong); background:rgba(255,255,255,.94); }
+  .sidebar { width:236px; background:var(--surface-rail); border-right:1px solid var(--line-strong); padding:14px; }
+  .nav-item { height:34px; display:flex; align-items:center; gap:10px; padding:0 10px; border-radius:5px; color:var(--ink-650); font-size:13px; }
+  .nav-item.active { background:#e8eef7; color:var(--ink-900); font-weight:700; }
+  .page { flex:1; background:var(--surface-page); padding:18px 24px 32px; }
+  .page-title { color:var(--ink-900); font-size:22px; line-height:1.15; font-weight:760; }
+  .page-sub { margin-top:5px; color:var(--ink-500); font-size:12.5px; }
+  .kpi-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:1px; overflow:hidden; border:1px solid var(--line-strong); border-radius:6px; background:var(--line-strong); }
+  .kpi { min-height:62px; padding:10px 12px; background:#fff; }
+  .kpi-label { color:var(--ink-500); font-size:11px; font-weight:650; text-transform:uppercase; }
+  .kpi-value { margin-top:6px; color:var(--ink-900); font-size:21px; font-weight:760; line-height:1; }
+  .kpi-meta { margin-top:5px; color:var(--ink-350); font-size:11px; }
+  .agent-row { display:grid; grid-template-columns:minmax(260px,1.5fr) 150px 190px 150px 80px; gap:12px; align-items:center; min-height:56px; border-bottom:1px solid var(--line-soft); padding:9px 12px; }
+  .agent-row:last-child { border-bottom:0; }
+  .agent-avatar { width:30px; height:30px; display:flex; align-items:center; justify-content:center; border:1px solid #cbd5e1; border-radius:6px; background:var(--surface-rail); color:var(--ink-700); font-weight:760; }
+  .name-main { color:var(--ink-900); font-size:13px; font-weight:700; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .name-sub { margin-top:2px; color:var(--ink-500); font-size:11.5px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .dot { width:7px; height:7px; border-radius:999px; background:var(--ink-350); box-shadow:0 0 0 3px transparent; display:inline-block; }
+  .dot.run { background:#16a34a; box-shadow:0 0 0 3px #dcfce7; }
+  .dot.warn { background:#d97706; box-shadow:0 0 0 3px #fef3c7; }
+  .dot.fail { background:var(--danger); box-shadow:0 0 0 3px var(--danger-soft); }
+  .workbench { display:grid; grid-template-columns:minmax(560px,1fr) 420px; gap:12px; }
+  .panel { border:1px solid var(--line-strong); border-radius:6px; background:#fff; padding:12px; }
+  .panel-title { color:var(--ink-900); font-size:12.5px; font-weight:760; }
+  .field-row { display:grid; grid-template-columns:64px minmax(0,1fr); gap:10px; align-items:center; margin-bottom:8px; }
+  .field-label { color:var(--ink-500); font-size:11.5px; font-weight:650; }
+  .codebox { border:1px solid var(--line); border-radius:6px; background:#f8fafc; padding:10px; color:var(--ink-650); font-size:12px; line-height:1.6; white-space:pre-wrap; }
+  .chat-layout { display:grid; grid-template-columns:210px minmax(0,1fr); min-height:320px; border:1px solid var(--line-strong); border-radius:6px; overflow:hidden; background:#fff; }
+  .chat-rail { border-right:1px solid var(--line-strong); background:var(--surface-rail); padding:10px; }
+  .rail-toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 0 10px; margin-bottom:6px; border-bottom:1px solid var(--line-strong); }
+  .rail-title { color:var(--ink-900); font-size:12px; font-weight:760; }
+  .rail-count { margin-top:2px; color:var(--ink-350); font-size:11px; }
+  .rail-new { height:26px; display:inline-flex; align-items:center; padding:0 8px; border:1px solid var(--line-strong); border-radius:5px; background:#fff; color:var(--ink-700); font-size:12px; font-weight:650; }
+  .session-item { padding:7px 8px; border-radius:5px; color:var(--ink-650); font-size:12px; margin-bottom:2px; }
+  .session-item.active { background:#e8eef7; color:var(--accent); font-weight:650; }
+  .chat-main { display:flex; flex-direction:column; min-width:0; }
+  .chat-body { flex:1; padding:14px 16px; }
+  .composer { border-top:1px solid var(--line-strong); padding:10px 16px 12px; background:#fff; }
+  .mini-note { color:var(--ink-350); font-size:11.5px; line-height:1.55; }
+  .do-dont { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .ok-box { border:1px solid #bbf7d0; background:#f7fef9; border-radius:6px; padding:14px; }
+  .bad-box { border:1px solid #fecaca; background:#fffafa; border-radius:6px; padding:14px; }
+  @media (max-width:900px) {
+    .cover, .grid-2, .grid-3, .grid-4, .workbench, .chat-layout, .do-dont { grid-template-columns:1fr; }
+    .toc, .token-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .agent-row { grid-template-columns:1fr; }
+  }
 </style>
 </helmet>
 
-<div style="font-family:-apple-system,'PingFang SC','Microsoft YaHei',Segoe UI,Inter,sans-serif; color:#17171C; background:#FAFAFB; min-height:100vh; padding:48px 24px 80px;">
-<div style="max-width:1040px; margin:0 auto;">
+<div class="doc">
+<div class="wrap">
 
-  <!-- ===== COVER ===== -->
-  <div style="display:flex; align-items:center; gap:16px; margin-bottom:14px;">
-    <div style="width:46px; height:46px; border-radius:11px; background:linear-gradient(135deg,#4F46E5,#7A72ED); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:22px; box-shadow:0 2px 7px rgba(79,70,229,0.32);">A</div>
-    <div style="line-height:1.2;">
-      <div style="font-weight:750; font-size:19px; letter-spacing:-0.2px;">AISpace · Agent 平台</div>
-      <div style="font-size:12.5px; color:#8A8C99; font-weight:600; letter-spacing:0.3px;">VISUAL SPECIFICATION</div>
-    </div>
-  </div>
-  <h1 style="margin:0 0 10px; font-size:38px; font-weight:750; letter-spacing:-1px; line-height:1.1;">视觉规范</h1>
-  <p style="margin:0 0 22px; font-size:15px; line-height:1.7; color:#5A5C6B; max-width:680px; text-wrap:pretty;">本规范是多人并行开发的统一视觉契约。所有页面、组件与新功能必须遵循此处定义的色彩、排版、间距、圆角与组件样式，确保产品在不同模块间保持一致的「工具化、高密度、克制」气质。</p>
-  <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:34px;">
-    <span style="font-size:12px; font-weight:600; color:#5A5C6B; background:#fff; border:1px solid #EBEBF1; border-radius:6px; padding:5px 11px;">01 设计原则</span>
-    <span style="font-size:12px; font-weight:600; color:#5A5C6B; background:#fff; border:1px solid #EBEBF1; border-radius:6px; padding:5px 11px;">02 色彩</span>
-    <span style="font-size:12px; font-weight:600; color:#5A5C6B; background:#fff; border:1px solid #EBEBF1; border-radius:6px; padding:5px 11px;">03 字体排版</span>
-    <span style="font-size:12px; font-weight:600; color:#5A5C6B; background:#fff; border:1px solid #EBEBF1; border-radius:6px; padding:5px 11px;">04 间距与布局</span>
-    <span style="font-size:12px; font-weight:600; color:#5A5C6B; background:#fff; border:1px solid #EBEBF1; border-radius:6px; padding:5px 11px;">05 圆角·描边·投影</span>
-    <span style="font-size:12px; font-weight:600; color:#5A5C6B; background:#fff; border:1px solid #EBEBF1; border-radius:6px; padding:5px 11px;">06 组件</span>
-    <span style="font-size:12px; font-weight:600; color:#5A5C6B; background:#fff; border:1px solid #EBEBF1; border-radius:6px; padding:5px 11px;">07 图标</span>
-    <span style="font-size:12px; font-weight:600; color:#5A5C6B; background:#fff; border:1px solid #EBEBF1; border-radius:6px; padding:5px 11px;">08 Do &amp; Don't</span>
-  </div>
-
-  <!-- ===== 01 PRINCIPLES ===== -->
-  <section style="background:#fff; border:1px solid #EBEBF1; border-radius:8px; padding:30px 32px; margin-bottom:18px;">
-    <div style="font-size:11px; font-weight:600; letter-spacing:0.8px; color:#A6A8B4;">01 — PRINCIPLES</div>
-    <h2 style="margin:6px 0 4px; font-size:20px; font-weight:750; letter-spacing:-0.3px;">设计原则</h2>
-    <p style="margin:0 0 22px; font-size:13.5px; color:#8A8C99;">这是一个开发者使用的工具平台，不是消费级产品。四条原则统领所有取舍。</p>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px 20px;">
-        <div style="font-size:14.5px; font-weight:650; margin-bottom:6px;">高密度</div>
-        <div style="font-size:13px; line-height:1.65; color:#5A5C6B;">紧凑的行高与内边距，让一屏承载更多信息。留白服务于分组，而非装饰。</div>
-      </div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px 20px;">
-        <div style="font-size:14.5px; font-weight:650; margin-bottom:6px;">硬朗边界</div>
-        <div style="font-size:13px; line-height:1.65; color:#5A5C6B;">小圆角（6–8px）、1px 发丝描边。用边界而非柔和阴影来界定结构，传达精确与可控。</div>
-      </div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px 20px;">
-        <div style="font-size:14.5px; font-weight:650; margin-bottom:6px;">克制配色</div>
-        <div style="font-size:13px; line-height:1.65; color:#5A5C6B;">中性灰白为主，靛蓝仅用于强调与可点击对象。语义色只在状态表达时出现。</div>
-      </div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px 20px;">
-        <div style="font-size:14.5px; font-weight:650; margin-bottom:6px;">层级清晰</div>
-        <div style="font-size:13px; line-height:1.65; color:#5A5C6B;">用字重与文本灰阶建立层级，而非字号膨胀。正文 14px，标题克制。</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== 02 COLOR ===== -->
-  <section style="background:#fff; border:1px solid #EBEBF1; border-radius:8px; padding:30px 32px; margin-bottom:18px;">
-    <div style="font-size:11px; font-weight:600; letter-spacing:0.8px; color:#A6A8B4;">02 — COLOR</div>
-    <h2 style="margin:6px 0 4px; font-size:20px; font-weight:750; letter-spacing:-0.3px;">色彩</h2>
-    <p style="margin:0 0 22px; font-size:13.5px; color:#8A8C99;">所有取色必须来自下表。十六进制为唯一真实来源，禁止凭感觉新造颜色。</p>
-
-    <div style="font-size:12px; font-weight:700; color:#33333C; letter-spacing:0.3px; margin:0 0 12px;">品牌强调色 · Indigo</div>
-    <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:26px;">
-      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#4F46E5;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#4F46E5</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">主色 · 链接/选中</div></div></div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#6E66EA;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#6E66EA</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">Hover</div></div></div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#7A72ED;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#7A72ED</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">渐变末端</div></div></div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#EEF0FF;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#EEF0FF</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">强调浅底 · 标签</div></div></div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#DCDFFF;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#DCDFFF</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">强调描边</div></div></div>
-    </div>
-
-    <div style="font-size:12px; font-weight:700; color:#33333C; letter-spacing:0.3px; margin:0 0 12px;">主操作墨色 &amp; 文本</div>
-    <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:26px;">
-      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#17171C;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#17171C</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">墨色 · 主按钮/一级文本</div></div></div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#5A5C6B;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#5A5C6B</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">二级文本</div></div></div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#8A8C99;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#8A8C99</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">三级文本</div></div></div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#A6A8B4;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#A6A8B4</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">占位 · 元信息</div></div></div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#4A4A55;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#4A4A55</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">技能标签文字</div></div></div>
-    </div>
-
-    <div style="font-size:12px; font-weight:700; color:#33333C; letter-spacing:0.3px; margin:0 0 12px;">描边 &amp; 表面</div>
-    <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:26px;">
-      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#E7E7EC;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#E7E7EC</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">控件描边</div></div></div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#EBEBF1;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#EBEBF1</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">卡片描边</div></div></div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#F1F1F5;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#F1F1F5</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">分隔线 · 发丝</div></div></div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#FAFAFB;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#FAFAFB</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">下沉面 · 侧栏/表头</div></div></div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;"><div style="height:52px; background:#FFFFFF; box-shadow:inset 0 0 0 1px #F1F1F5;"></div><div style="padding:9px 11px;"><div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; font-weight:600;">#FFFFFF</div><div style="font-size:11.5px; color:#8A8C99; margin-top:2px;">基础面</div></div></div>
-    </div>
-
-    <div style="font-size:12px; font-weight:700; color:#33333C; letter-spacing:0.3px; margin:0 0 12px;">语义色 · 仅用于状态</div>
-    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px;">
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:16px;">
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;"><span style="width:10px; height:10px; border-radius:50%; background:#34C759;"></span><span style="font-size:13px; font-weight:650;">成功 Success</span></div>
-        <div style="background:#EAF8F0; color:#1E8449; border-radius:6px; padding:7px 10px; font-size:12.5px; font-weight:600;">已连接 · 配置生效</div>
-        <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8A8C99; margin-top:9px;">文字#1E8449 / 底#EAF8F0 / 点#34C759</div>
-      </div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:16px;">
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;"><span style="width:10px; height:10px; border-radius:50%; background:#E6A817;"></span><span style="font-size:13px; font-weight:650;">警告 Warning</span></div>
-        <div style="background:#FFF8E6; color:#946C00; border:1px solid #FCE2A0; border-radius:6px; padding:6px 10px; font-size:12.5px; font-weight:600;">正在查看历史版本</div>
-        <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8A8C99; margin-top:9px;">文字#946C00 / 底#FFF8E6 / 边#FCE2A0</div>
-      </div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:16px;">
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;"><span style="width:10px; height:10px; border-radius:50%; background:#E5484D;"></span><span style="font-size:13px; font-weight:650;">危险 Danger</span></div>
-        <div style="background:#FDECEC; color:#C0392B; border-radius:6px; padding:7px 10px; font-size:12.5px; font-weight:600;">删除该 Agent</div>
-        <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8A8C99; margin-top:9px;">主#E5484D / 文字#C0392B / 底#FDECEC</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== 03 TYPOGRAPHY ===== -->
-  <section style="background:#fff; border:1px solid #EBEBF1; border-radius:8px; padding:30px 32px; margin-bottom:18px;">
-    <div style="font-size:11px; font-weight:600; letter-spacing:0.8px; color:#A6A8B4;">03 — TYPOGRAPHY</div>
-    <h2 style="margin:6px 0 4px; font-size:20px; font-weight:750; letter-spacing:-0.3px;">字体排版</h2>
-    <p style="margin:0 0 22px; font-size:13.5px; color:#8A8C99;">系统字体栈，无需加载外部字库。层级靠字重与灰阶，不靠字号膨胀。</p>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:24px;">
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:16px 18px;">
-        <div style="font-size:11px; color:#A6A8B4; font-weight:600; margin-bottom:6px;">界面字体 · UI</div>
-        <div style="font-size:15px; font-weight:600;">-apple-system, "PingFang SC",</div>
-        <div style="font-size:15px; font-weight:600;">"Microsoft YaHei", Segoe UI, Inter</div>
-      </div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:16px 18px;">
-        <div style="font-size:11px; color:#A6A8B4; font-weight:600; margin-bottom:6px;">等宽字体 · Mono</div>
-        <div style="font-family:ui-monospace,Menlo,monospace; font-size:14px; font-weight:600;">ui-monospace, SFMono-Regular,</div>
-        <div style="font-family:ui-monospace,Menlo,monospace; font-size:14px; font-weight:600;">Menlo, monospace</div>
-        <div style="font-size:11.5px; color:#8A8C99; margin-top:4px;">用于模型名、参数、代码、版本号</div>
-      </div>
-    </div>
-
-    <div style="border:1px solid #F1F1F5; border-radius:8px; overflow:hidden;">
-      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #F1F1F5;"><span style="font-size:20px; font-weight:750; letter-spacing:-0.3px;">页面标题 Agents</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#8A8C99;">20px / 750</span></div>
-      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #F1F1F5;"><span style="font-size:17px; font-weight:700;">详情标题 / 模块名</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#8A8C99;">17px / 700</span></div>
-      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #F1F1F5;"><span style="font-size:14.5px; font-weight:650;">卡片标题 · 需求分析助手</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#8A8C99;">14.5px / 650</span></div>
-      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #F1F1F5;"><span style="font-size:13px; font-weight:600;">区块标题 · 配置文件</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#8A8C99;">13px / 600</span></div>
-      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #F1F1F5;"><span style="font-size:14px; font-weight:400;">正文 Body · 默认文本与按钮文字</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#8A8C99;">14px / 400 · base</span></div>
-      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #F1F1F5;"><span style="font-size:13.5px; font-weight:400; color:#5A5C6B;">次要正文 · 描述与说明</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#8A8C99;">13.5px / 400</span></div>
-      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #F1F1F5;"><span style="font-size:12px; font-weight:400; color:#8A8C99;">元信息 · 时间戳 / 计数</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#8A8C99;">12px / 400</span></div>
-      <div style="display:flex; align-items:baseline; justify-content:space-between; padding:14px 18px;"><span style="font-size:10.5px; font-weight:600; color:#A6A8B4; letter-spacing:0.6px;">导航分组标签 · 工作空间</span><span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#8A8C99;">10.5px / 600 · +0.6</span></div>
-    </div>
-
-    <div style="display:flex; gap:8px; margin-top:18px; flex-wrap:wrap;">
-      <span style="font-size:12px; color:#5A5C6B;">字重梯度：</span>
-      <span style="font-size:13px; font-weight:400;">400 常规</span><span style="color:#D0D0D8;">·</span>
-      <span style="font-size:13px; font-weight:500;">500 按钮</span><span style="color:#D0D0D8;">·</span>
-      <span style="font-size:13px; font-weight:600;">600 半粗</span><span style="color:#D0D0D8;">·</span>
-      <span style="font-size:13px; font-weight:650;">650 标题</span><span style="color:#D0D0D8;">·</span>
-      <span style="font-size:13px; font-weight:700;">700 强调</span><span style="color:#D0D0D8;">·</span>
-      <span style="font-size:13px; font-weight:750;">750 展示</span>
-    </div>
-  </section>
-
-  <!-- ===== 04 SPACING & LAYOUT ===== -->
-  <section style="background:#fff; border:1px solid #EBEBF1; border-radius:8px; padding:30px 32px; margin-bottom:18px;">
-    <div style="font-size:11px; font-weight:600; letter-spacing:0.8px; color:#A6A8B4;">04 — SPACING &amp; LAYOUT</div>
-    <h2 style="margin:6px 0 4px; font-size:20px; font-weight:750; letter-spacing:-0.3px;">间距与布局</h2>
-    <p style="margin:0 0 22px; font-size:13.5px; color:#8A8C99;">基础步进 4px。密度优先——行内边距与间距偏紧，留白用于分组。</p>
-
-    <div style="font-size:12px; font-weight:700; color:#33333C; margin:0 0 12px;">间距步进</div>
-    <div style="display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap; margin-bottom:26px;">
-      <div style="text-align:center;"><div style="width:6px; height:6px; background:#4F46E5; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">6</div></div>
-      <div style="text-align:center;"><div style="width:8px; height:8px; background:#4F46E5; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">8</div></div>
-      <div style="text-align:center;"><div style="width:10px; height:10px; background:#4F46E5; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">10</div></div>
-      <div style="text-align:center;"><div style="width:12px; height:12px; background:#4F46E5; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">12</div></div>
-      <div style="text-align:center;"><div style="width:14px; height:14px; background:#6E66EA; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">14</div></div>
-      <div style="text-align:center;"><div style="width:16px; height:16px; background:#6E66EA; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">16</div></div>
-      <div style="text-align:center;"><div style="width:20px; height:20px; background:#7A72ED; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">20</div></div>
-      <div style="text-align:center;"><div style="width:24px; height:24px; background:#7A72ED; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">24</div></div>
-      <div style="text-align:center;"><div style="width:28px; height:28px; background:#A9A4F2; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">28</div></div>
-      <div style="text-align:center;"><div style="width:32px; height:32px; background:#A9A4F2; border-radius:2px; margin:0 auto;"></div><div style="font-size:11px; color:#8A8C99; margin-top:6px;">32</div></div>
-    </div>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px 20px;">
-        <div style="font-size:13px; font-weight:650; margin-bottom:12px;">关键布局尺寸</div>
-        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">侧边栏宽度</span><span style="font-family:ui-monospace,Menlo,monospace;">236px</span></div>
-        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">顶栏高度</span><span style="font-family:ui-monospace,Menlo,monospace;">56px</span></div>
-        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">内容区最大宽</span><span style="font-family:ui-monospace,Menlo,monospace;">1240px</span></div>
-        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">内容区内边距</span><span style="font-family:ui-monospace,Menlo,monospace;">20 / 28 / 36</span></div>
-        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0;"><span style="color:#5A5C6B;">控件高度</span><span style="font-family:ui-monospace,Menlo,monospace;">34px</span></div>
-      </div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px 20px;">
-        <div style="font-size:13px; font-weight:650; margin-bottom:12px;">密度基准</div>
-        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">列表行内边距</span><span style="font-family:ui-monospace,Menlo,monospace;">9px 14px</span></div>
-        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">列表行间距</span><span style="font-family:ui-monospace,Menlo,monospace;">6px</span></div>
-        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">表格单元竖向内边距</span><span style="font-family:ui-monospace,Menlo,monospace;">9px</span></div>
-        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">面板内边距</span><span style="font-family:ui-monospace,Menlo,monospace;">20–24px</span></div>
-        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0;"><span style="color:#5A5C6B;">按钮横向内边距</span><span style="font-family:ui-monospace,Menlo,monospace;">16px</span></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== 05 RADIUS / BORDER / ELEVATION ===== -->
-  <section style="background:#fff; border:1px solid #EBEBF1; border-radius:8px; padding:30px 32px; margin-bottom:18px;">
-    <div style="font-size:11px; font-weight:600; letter-spacing:0.8px; color:#A6A8B4;">05 — RADIUS · BORDER · ELEVATION</div>
-    <h2 style="margin:6px 0 4px; font-size:20px; font-weight:750; letter-spacing:-0.3px;">圆角 · 描边 · 投影</h2>
-    <p style="margin:0 0 22px; font-size:13.5px; color:#8A8C99;">硬朗、克制。优先用 1px 描边界定结构，阴影仅作轻微的悬浮反馈。</p>
-
-    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px;">
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:16px; text-align:center;"><div style="width:54px; height:54px; background:#EEF0FF; border:1px solid #DCDFFF; border-radius:6px; margin:0 auto 10px;"></div><div style="font-size:12.5px; font-weight:650;">6px</div><div style="font-size:11.5px; color:#8A8C99;">控件 · 标签 · 代码块</div></div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:16px; text-align:center;"><div style="width:54px; height:54px; background:#EEF0FF; border:1px solid #DCDFFF; border-radius:8px; margin:0 auto 10px;"></div><div style="font-size:12.5px; font-weight:650;">8px</div><div style="font-size:11.5px; color:#8A8C99;">卡片 · 面板</div></div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:16px; text-align:center;"><div style="width:54px; height:54px; background:#EEF0FF; border:1px solid #DCDFFF; border-radius:6px; margin:0 auto 10px;"></div><div style="font-size:12.5px; font-weight:650;">6px</div><div style="font-size:11.5px; color:#8A8C99;">图标容器</div></div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:16px; text-align:center;"><div style="width:54px; height:54px; background:#4F46E5; border-radius:50%; margin:0 auto 10px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:600;">H</div><div style="font-size:12.5px; font-weight:650;">50%</div><div style="font-size:11.5px; color:#8A8C99;">头像</div></div>
-    </div>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px;">
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px;">
-        <div style="font-size:13px; font-weight:650; margin-bottom:14px;">静止 Rest</div>
-        <div style="height:46px; background:#fff; border:1px solid #EBEBF1; border-radius:8px;"></div>
-        <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8A8C99; margin-top:10px;">1px #EBEBF1 · 无阴影</div>
-      </div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px;">
-        <div style="font-size:13px; font-weight:650; margin-bottom:14px;">悬浮 Hover</div>
-        <div style="height:46px; background:#fff; border:1px solid #C9CAD6; border-radius:8px; box-shadow:0 1px 2px rgba(20,20,45,0.06);"></div>
-        <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8A8C99; margin-top:10px;">边#C9CAD6 · 0 1px 2px /.06</div>
-      </div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px;">
-        <div style="font-size:13px; font-weight:650; margin-bottom:14px;">聚焦环 Focus</div>
-        <div style="height:46px; background:#fff; border:1px solid #4F46E5; border-radius:8px; box-shadow:0 0 0 3px rgba(79,70,229,0.10);"></div>
-        <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8A8C99; margin-top:10px;">3px rgba(79,70,229,.10)</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== 06 COMPONENTS ===== -->
-  <section style="background:#fff; border:1px solid #EBEBF1; border-radius:8px; padding:30px 32px; margin-bottom:18px;">
-    <div style="font-size:11px; font-weight:600; letter-spacing:0.8px; color:#A6A8B4;">06 — COMPONENTS</div>
-    <h2 style="margin:6px 0 4px; font-size:20px; font-weight:750; letter-spacing:-0.3px;">组件</h2>
-    <p style="margin:0 0 22px; font-size:13.5px; color:#8A8C99;">基于 Ant Design 5，按下列样式覆写。所有控件高度 34px、圆角 6px。</p>
-
-    <!-- buttons -->
-    <div style="font-size:12px; font-weight:700; color:#33333C; margin:0 0 12px;">按钮 Button</div>
-    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:10px;">
-      <span style="height:34px; display:inline-flex; align-items:center; padding:0 16px; background:#17171C; color:#fff; border-radius:6px; font-size:14px; font-weight:500;">主操作 Primary</span>
-      <span style="height:34px; display:inline-flex; align-items:center; padding:0 16px; background:#fff; color:#17171C; border:1px solid #E7E7EC; border-radius:6px; font-size:14px; font-weight:500;">默认 Default</span>
-      <span style="height:34px; display:inline-flex; align-items:center; padding:0 12px; background:transparent; color:#4F46E5; border-radius:6px; font-size:14px; font-weight:500;">文字 Text</span>
-      <span style="height:34px; display:inline-flex; align-items:center; padding:0 14px; background:#fff; color:#5A5C6B; border:1px dashed #D0D0D8; border-radius:6px; font-size:14px; font-weight:500;">+ 虚线 Dashed</span>
-      <span style="height:34px; display:inline-flex; align-items:center; padding:0 12px; background:transparent; color:#E5484D; border-radius:6px; font-size:14px; font-weight:500;">删除 Danger</span>
-      <span style="height:34px; display:inline-flex; align-items:center; padding:0 16px; background:#F4F4F7; color:#BBBCC6; border-radius:6px; font-size:14px; font-weight:500;">禁用 Disabled</span>
-    </div>
-    <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8A8C99; margin-bottom:26px;">主按钮 = 墨色 #17171C 实底 · 无投影 · colorPrimary 即墨色，强调靛蓝只走链接/选中</div>
-
-    <!-- tags / pills -->
-    <div style="font-size:12px; font-weight:700; color:#33333C; margin:0 0 12px;">标签与药丸 Tag · Pill · Chip</div>
-    <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px;">
-      <span style="background:#EEF0FF; color:#4F46E5; font-size:11px; padding:2px 8px; border-radius:6px; font-weight:600;">Claude Code</span>
-      <span style="background:#F1F1F4; color:#5A5C6B; font-size:11px; padding:2px 8px; border-radius:6px; font-weight:600;">v2</span>
-      <span style="background:#EEF0FF; color:#4F46E5; font-size:12px; padding:3px 10px; border-radius:6px; font-weight:500;">web_search ×</span>
-      <span style="background:#F1F1F4; color:#4A4A55; font-size:12px; padding:3px 10px; border-radius:6px; font-weight:500;">需求分析 ×</span>
-      <span style="font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:#5A5C6B; background:#FAFAFB; border:1px solid #F1F1F5; border-radius:6px; padding:3px 8px;">claude-sonnet-4-6</span>
-    </div>
-    <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8A8C99; margin-bottom:26px;">强调药丸 #EEF0FF/#4F46E5 · 中性药丸 #F1F1F4/#5A5C6B · 模型码片 = 等宽 + 下沉底</div>
-
-    <!-- inputs -->
-    <div style="font-size:12px; font-weight:700; color:#33333C; margin:0 0 12px;">输入控件 Input · Select · Segmented</div>
-    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:26px;">
-      <span style="height:34px; width:240px; display:inline-flex; align-items:center; gap:8px; padding:0 12px; background:#fff; border:1px solid #E7E7EC; border-radius:6px; font-size:13.5px; color:#A6A8B4;">⌕ 搜索 Agent 名称</span>
-      <span style="height:34px; display:inline-flex; align-items:center; justify-content:space-between; gap:24px; padding:0 12px; background:#fff; border:1px solid #E7E7EC; border-radius:6px; font-size:13.5px; color:#17171C;">最近编辑 <span style="color:#A6A8B4; font-size:10px;">▾</span></span>
-      <span style="display:inline-flex; background:#F1F1F4; border-radius:6px; padding:3px;"><span style="background:#fff; color:#17171C; font-size:13px; padding:4px 14px; border-radius:5px; font-weight:500;">JSON</span><span style="color:#5B5D6B; font-size:13px; padding:4px 14px;">YAML</span></span>
-    </div>
-
-    <!-- callouts -->
-    <div style="font-size:12px; font-weight:700; color:#33333C; margin:0 0 12px;">提示条 Callout</div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:26px;">
-      <div style="background:#EEF0FF; border:1px solid #DCDFFF; border-radius:8px; padding:10px 14px; font-size:13px; color:#4F46E5;">正在查看最新版本 v2</div>
-      <div style="background:#FFF8E6; border:1px solid #FCE2A0; border-radius:8px; padding:10px 14px; font-size:13px; color:#946C00;">正在只读查看历史版本；编辑将基于该版本生成新版本。</div>
-    </div>
-
-    <!-- agent row card -->
-    <div style="font-size:12px; font-weight:700; color:#33333C; margin:0 0 12px;">列表行卡片 Row Card · 高密度</div>
-    <div style="display:flex; align-items:center; gap:12px; padding:9px 14px; background:#fff; border:1px solid #EBEBF1; border-radius:8px; margin-bottom:10px;">
-      <div style="width:32px; height:32px; border-radius:6px; background:#EEF0FF; display:flex; align-items:center; justify-content:center; flex-shrink:0; color:#4F46E5; font-size:16px;">◆</div>
-      <div style="flex:1; min-width:0;">
-        <div style="display:flex; align-items:center; gap:8px;"><span style="font-weight:650; font-size:14.5px; color:#17171C;">需求分析助手</span><span style="background:#F1F1F4; color:#5A5C6B; font-size:11px; padding:2px 8px; border-radius:6px; font-weight:600;">v2</span></div>
-        <div style="color:#8A8C99; font-size:12.5px; margin-top:3px;">把用户对话整理成结构化需求</div>
-      </div>
-      <span style="background:#EEF0FF; color:#4F46E5; font-size:11px; padding:2px 8px; border-radius:6px; font-weight:600;">Claude Code</span>
-      <span style="font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:#5A5C6B; background:#FAFAFB; border:1px solid #F1F1F5; border-radius:6px; padding:3px 8px;">claude-sonnet-4-6</span>
-      <span style="color:#A6A8B4; font-size:12px;">06-24 17:04</span>
-    </div>
-    <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8A8C99;">行高紧凑 · 1px #EBEBF1 描边 · 8px 圆角 · 悬浮仅加 1px 软阴影</div>
-  </section>
-
-  <!-- ===== 07 ICONOGRAPHY ===== -->
-  <section style="background:#fff; border:1px solid #EBEBF1; border-radius:8px; padding:30px 32px; margin-bottom:18px;">
-    <div style="font-size:11px; font-weight:600; letter-spacing:0.8px; color:#A6A8B4;">07 — ICONOGRAPHY</div>
-    <h2 style="margin:6px 0 4px; font-size:20px; font-weight:750; letter-spacing:-0.3px;">图标</h2>
-    <p style="margin:0 0 20px; font-size:13.5px; color:#8A8C99;">统一使用 <span style="font-family:ui-monospace,Menlo,monospace;">@ant-design/icons</span> 线性图标。不混用其它图标库，不使用 emoji。</p>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px 20px;">
-        <div style="font-size:13px; font-weight:650; margin-bottom:10px;">尺寸</div>
-        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">导航 / 菜单</span><span style="font-family:ui-monospace,Menlo,monospace;">16px</span></div>
-        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">行内 / 按钮</span><span style="font-family:ui-monospace,Menlo,monospace;">14px</span></div>
-        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0;"><span style="color:#5A5C6B;">列表图标容器内</span><span style="font-family:ui-monospace,Menlo,monospace;">16–17px</span></div>
-      </div>
-      <div style="border:1px solid #F1F1F5; border-radius:8px; padding:18px 20px;">
-        <div style="font-size:13px; font-weight:650; margin-bottom:10px;">颜色</div>
-        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">默认 / 次要</span><span style="font-family:ui-monospace,Menlo,monospace;">#8A8C99</span></div>
-        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0; border-bottom:1px solid #F6F6F9;"><span style="color:#5A5C6B;">强调 / 激活</span><span style="font-family:ui-monospace,Menlo,monospace;">#4F46E5</span></div>
-        <div style="display:flex; justify-content:space-between; font-size:12.5px; padding:5px 0;"><span style="color:#5A5C6B;">危险</span><span style="font-family:ui-monospace,Menlo,monospace;">#E5484D</span></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ===== 08 DO & DON'T ===== -->
-  <section style="background:#fff; border:1px solid #EBEBF1; border-radius:8px; padding:30px 32px; margin-bottom:18px;">
-    <div style="font-size:11px; font-weight:600; letter-spacing:0.8px; color:#A6A8B4;">08 — DO &amp; DON'T</div>
-    <h2 style="margin:6px 0 4px; font-size:20px; font-weight:750; letter-spacing:-0.3px;">该做 / 不该做</h2>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:18px;">
-      <div style="border:1px solid #D6EFDF; background:#F6FCF8; border-radius:8px; padding:18px 20px;">
-        <div style="font-size:13px; font-weight:700; color:#1E8449; margin-bottom:12px;">✓ 该做</div>
-        <div style="font-size:13px; line-height:1.85; color:#33333C;">
-          紧凑行高，一屏多信息<br>
-          6–8px 小圆角，硬朗发丝描边<br>
-          靛蓝只用于强调与可点击对象<br>
-          层级靠字重与灰阶，不靠字号<br>
-          模型名 / 参数 / 代码用等宽字体
+  <div class="cover">
+    <div>
+      <div class="brand">
+        <div class="mark">A</div>
+        <div>
+          <div class="brand-title">AISpace · Agent 平台</div>
+          <div class="brand-sub">Visual system specification</div>
         </div>
       </div>
-      <div style="border:1px solid #F6D9DA; background:#FDF7F7; border-radius:8px; padding:18px 20px;">
-        <div style="font-size:13px; font-weight:700; color:#C0392B; margin-bottom:12px;">✕ 不该做</div>
-        <div style="font-size:13px; line-height:1.85; color:#33333C;">
-          大圆角（≥12px）与大柔阴影<br>
-          凭感觉新造色值或渐变<br>
-          宽松留白、营销式大标题<br>
-          彩色滥用、强调色铺大面积<br>
-          混用其它图标库或 emoji
+      <h1>视觉设计风格规范</h1>
+      <p class="lead">这是 AISpace 后续所有页面的视觉与交互一致性契约。当前风格定位是专业、高密度、工具化、克制，不做营销式大视觉，不做低密度卡片堆叠。新页面优先复用本规范中的页面骨架、列表模式、工作台模式、会话模式和资源页模式。</p>
+    </div>
+    <div class="meta-box">
+      <div class="meta-row"><span>状态</span><span class="mono">authoritative</span></div>
+      <div class="meta-row"><span>版本</span><span class="mono">v2</span></div>
+      <div class="meta-row"><span>最近更新</span><span class="mono">2026-06-28</span></div>
+      <div class="meta-row"><span>设计来源</span><span>当前前端实现 + Agent 流程重构</span></div>
+      <div class="meta-row"><span>实现参照</span><span class="mono">frontend/src/agent-redesign.css</span></div>
+    </div>
+  </div>
+
+  <div class="toc">
+    <span>01 定位原则</span>
+    <span>02 Design Tokens</span>
+    <span>03 页面骨架</span>
+    <span>04 信息密度</span>
+    <span>05 组件规范</span>
+    <span>06 Agent 页面模式</span>
+    <span>07 Chat / Playground</span>
+    <span>08 资源与管理页</span>
+    <span>09 状态与反馈</span>
+    <span>10 检查清单</span>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow">01 · Product Character</div>
+        <h2>产品气质与设计原则</h2>
+        <p class="sec-copy">AISpace 是给开发者和平台运营者使用的 Agent 工作台。页面第一目标是让用户快速判断状态、定位对象、执行下一步，而不是营造轻松、可爱或品牌展示感。</p>
+      </div>
+      <span class="tag">全局原则</span>
+    </div>
+    <div class="grid-4">
+      <div class="card">
+        <div class="card-title">高密度但不拥挤</div>
+        <div class="card-copy">一屏承载更多可决策信息。列表、表格、工具栏、右侧面板都采用紧凑行高；留白只用于分组和阅读节奏。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">克制、硬朗、可控</div>
+        <div class="card-copy">小圆角、浅背景、发丝描边、少阴影。界面像专业运维工具，而不是营销落地页或低龄化 SaaS。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">状态优先</div>
+        <div class="card-copy">Agent 平台的核心信息是状态、版本、负责人、运行方式。视觉层级必须让 Live、Draft、Runtime、Owner 一眼可见。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">操作入口明确</div>
+        <div class="card-copy">同一动作只保留一个主入口。不要让行点击、文字链接、按钮同时进入同一功能；列表页用显式操作按钮。</div>
+      </div>
+    </div>
+    <div class="rule"></div>
+    <div class="grid-2">
+      <div class="ok-box">
+        <div class="card-title">应该呈现为</div>
+        <ul class="spec-list">
+          <li>专业控制台，信息紧凑，结构明确。</li>
+          <li>中性色为主体，蓝色只承担链接、选中和少量强调。</li>
+          <li>表格和工作台优先，卡片只用于 KPI、面板、重复资源项。</li>
+          <li>标题克制，靠字重和灰阶做层级。</li>
+        </ul>
+      </div>
+      <div class="bad-box">
+        <div class="card-title">禁止回到</div>
+        <ul class="spec-list">
+          <li>大号 hero、营销式空话、装饰性插画。</li>
+          <li>大量渐变、彩色卡片、12px 以上大圆角。</li>
+          <li>信息堆叠但没有主次判断。</li>
+          <li>同一功能出现多个入口，或入口文案不说明结果。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow">02 · Design Tokens</div>
+        <h2>颜色、字体、圆角、间距</h2>
+        <p class="sec-copy">后续新页面应优先使用下面 tokens。旧规范中的靛蓝渐变只作为历史视觉，不再作为页面主风格。</p>
+      </div>
+      <span class="tag">禁止随手造色</span>
+    </div>
+
+    <div class="card-title">核心中性色</div>
+    <div class="token-grid">
+      <div class="swatch"><div class="swatch-color" style="background:#0f172a;"></div><div class="swatch-body"><div class="swatch-code mono">#0F172A</div><div class="swatch-label">页面标题、主按钮</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#111827;"></div><div class="swatch-body"><div class="swatch-code mono">#111827</div><div class="swatch-label">正文主文本</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#334155;"></div><div class="swatch-body"><div class="swatch-code mono">#334155</div><div class="swatch-label">行内重点</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#475569;"></div><div class="swatch-body"><div class="swatch-code mono">#475569</div><div class="swatch-label">二级文本</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#64748b;"></div><div class="swatch-body"><div class="swatch-code mono">#64748B</div><div class="swatch-label">说明、标签</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#94a3b8;"></div><div class="swatch-body"><div class="swatch-code mono">#94A3B8</div><div class="swatch-label">元信息、占位</div></div></div>
+    </div>
+
+    <div class="rule"></div>
+    <div class="card-title">表面与边界</div>
+    <div class="token-grid">
+      <div class="swatch"><div class="swatch-color" style="background:#f6f7f9;"></div><div class="swatch-body"><div class="swatch-code mono">#F6F7F9</div><div class="swatch-label">页面背景</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#f8fafc;"></div><div class="swatch-body"><div class="swatch-code mono">#F8FAFC</div><div class="swatch-label">侧栏、下沉区</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#ffffff;"></div><div class="swatch-body"><div class="swatch-code mono">#FFFFFF</div><div class="swatch-label">主面板</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#dfe3ea;"></div><div class="swatch-body"><div class="swatch-code mono">#DFE3EA</div><div class="swatch-label">强分割线</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#e2e8f0;"></div><div class="swatch-body"><div class="swatch-code mono">#E2E8F0</div><div class="swatch-label">普通描边</div></div></div>
+      <div class="swatch"><div class="swatch-color" style="background:#edf0f4;"></div><div class="swatch-body"><div class="swatch-code mono">#EDF0F4</div><div class="swatch-label">表格行分割</div></div></div>
+    </div>
+
+    <div class="rule"></div>
+    <div class="grid-2">
+      <div>
+        <div class="card-title">强调与语义色</div>
+        <table>
+          <thead><tr><th>用途</th><th>前景</th><th>背景</th><th>使用边界</th></tr></thead>
+          <tbody>
+            <tr><td>链接 / 选中</td><td class="mono">#2563EB</td><td class="mono">#EEF2FF</td><td>导航选中、会话选中、链接、少量强调。</td></tr>
+            <tr><td>Legacy Indigo</td><td class="mono">#4F46E5</td><td class="mono">#EEF0FF</td><td>现有标签可保留，新页面优先用 #2563EB。</td></tr>
+            <tr><td>成功 / Running</td><td class="mono">#047857</td><td class="mono">#ECFDF5</td><td>运行中、已发布、配置生效。</td></tr>
+            <tr><td>警告 / Deploying</td><td class="mono">#B45309</td><td class="mono">#FFFBEB</td><td>部署中、历史只读、需要注意但不等于错误。</td></tr>
+            <tr><td>错误 / Failed</td><td class="mono">#DC2626</td><td class="mono">#FEE2E2</td><td>失败、删除、不可恢复动作。</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <div class="card-title">字体与尺寸</div>
+        <table>
+          <thead><tr><th>层级</th><th>尺寸 / 字重</th><th>示例</th></tr></thead>
+          <tbody>
+            <tr><td>页面标题</td><td class="mono">22px / 760</td><td>Agent Operations</td></tr>
+            <tr><td>工作台标题</td><td class="mono">18px / 760</td><td>Agent 名称输入</td></tr>
+            <tr><td>模块标题</td><td class="mono">12.5px / 760</td><td>线上发布与运行</td></tr>
+            <tr><td>表格正文</td><td class="mono">12-13px / 400-700</td><td>Agent 名、Owner、Live</td></tr>
+            <tr><td>说明文字</td><td class="mono">12.5px / 400</td><td>页面 subtitle、空状态说明</td></tr>
+            <tr><td>元信息</td><td class="mono">11-11.5px</td><td>版本、更新时间、状态 meta</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="rule"></div>
+    <div class="grid-3">
+      <div class="card">
+        <div class="card-title">圆角</div>
+        <div class="card-copy">控件、面板、表格壳统一 5-6px。Avatar、图标容器也使用 6px。除头像外不要使用胶囊形大圆角。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">间距</div>
+        <div class="card-copy">基础步进 4px。页面 padding 18/24/32，面板 padding 12，工具栏 padding 8，表格行 padding 9/12。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">阴影</div>
+        <div class="card-copy">默认无阴影。悬浮最多使用 0 1px 2px rgba(15,23,42,.06)。不要使用大面积柔和阴影。</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow">03 · Application Shell</div>
+        <h2>页面骨架与导航</h2>
+        <p class="sec-copy">所有一级页面都使用同一个控制台骨架：固定左侧栏、顶部面包屑、内容区。不要为单个页面发明新的导航结构。</p>
+      </div>
+      <span class="tag">Layout</span>
+    </div>
+    <div class="preview-shell">
+      <div style="display:flex; min-height:360px;">
+        <div class="sidebar">
+          <div class="brand" style="margin-bottom:16px;"><div class="mark" style="width:30px;height:30px;font-size:15px;">A</div><div class="brand-title">AISpace</div></div>
+          <div class="nav-item active">Agent</div>
+          <div class="nav-item">部署</div>
+          <div class="nav-item">Playground</div>
+          <div class="nav-item">会话</div>
+          <div class="nav-item">Skill</div>
+          <div class="nav-item">MCP</div>
+        </div>
+        <div style="flex:1; min-width:0;">
+          <div class="topbar"><span style="color:var(--ink-500);">我的工作空间 / <b style="color:var(--ink-900);">Agent</b></span><span class="tag">Owner</span></div>
+          <div class="page">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+              <div><div class="page-title">Agent Operations</div><div class="page-sub">围绕负责人、Live 版本、发布方式和草稿状态做运营判断。</div></div>
+              <span class="btn btn-primary">创建 Agent</span>
+            </div>
+            <div class="kpi-grid">
+              <div class="kpi"><div class="kpi-label">All agents</div><div class="kpi-value">12</div><div class="kpi-meta">3 个仅草稿</div></div>
+              <div class="kpi"><div class="kpi-label">Published live</div><div class="kpi-value">8</div><div class="kpi-meta">已有线上版本</div></div>
+              <div class="kpi"><div class="kpi-label">Running live</div><div class="kpi-value">6</div><div class="kpi-meta">当前可被调用</div></div>
+              <div class="kpi"><div class="kpi-label">Attention</div><div class="kpi-value">2</div><div class="kpi-meta">部署中 1 · 失败 1</div></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
+    <div class="rule"></div>
+    <table>
+      <thead><tr><th>区域</th><th>规范</th><th>不要做</th></tr></thead>
+      <tbody>
+        <tr><td>左侧栏</td><td>固定 236px，背景 #F8FAFC，分组标题 10.5px uppercase，菜单项 34px 高。</td><td>不要在内容区重复一级导航。</td></tr>
+        <tr><td>顶栏</td><td>48px 高，半透明白底，承载空间/页面路径和账号状态。</td><td>不要放复杂筛选器，筛选属于页面工具栏。</td></tr>
+        <tr><td>内容区</td><td>背景 #F6F7F9，默认 padding 18px 24px 32px，最大宽 1480px。</td><td>不要在内容区外再套大卡片。</td></tr>
+        <tr><td>页面标题</td><td>22px/760，subtitle 12.5px。说明当前页面的操作对象和判断标准。</td><td>不要写营销 slogan。</td></tr>
+      </tbody>
+    </table>
   </section>
 
-  <div style="text-align:center; font-size:12px; color:#A6A8B4; padding:14px 0 0;">AISpace · Agent 平台 · 视觉规范 v1 — 本文件由当前 index.html 提炼，任何 token 变更须同步更新本规范</div>
+  <section>
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow">04 · Information Density</div>
+        <h2>信息密度与页面结构</h2>
+        <p class="sec-copy">页面不是越多信息越好，而是把用户在当前任务中需要判断的主信息排在首屏，次要信息进入 drawer、modal、详情页或二级 meta。</p>
+      </div>
+      <span class="tag">信息取舍</span>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">列表页适合展示</div>
+        <ul class="spec-list">
+          <li>对象名称、简短描述、稳定 ID 或框架。</li>
+          <li>负责人或归属方。</li>
+          <li>当前业务状态：Live、Runtime、Draft、权限、启用状态。</li>
+          <li>最后更新或最近活动，作为排序和判断线索。</li>
+          <li>一到两个明确操作按钮。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-title">列表页不适合展示</div>
+        <ul class="spec-list">
+          <li>不会影响当前选择的大段配置。</li>
+          <li>模型参数、完整 prompt、长工具说明。</li>
+          <li>多个相近状态字段，例如 Change、Needs publish 这类含义模糊字段。</li>
+          <li>强迫用户发布的判断，除非确实是错误或风险。</li>
+          <li>重复入口，例如行点击和按钮都打开同一页。</li>
+        </ul>
+      </div>
+    </div>
+    <div class="rule"></div>
+    <table>
+      <thead><tr><th>页面类型</th><th>首屏结构</th><th>信息密度</th><th>主要操作</th></tr></thead>
+      <tbody>
+        <tr><td>运营列表页</td><td>标题 + KPI 条 + 工具栏 + 表格</td><td>最高</td><td>筛选、排序、管理、创建</td></tr>
+        <tr><td>资源管理页</td><td>标题 + 工具栏 + 表格/紧凑卡片</td><td>高</td><td>上传/注册、启停、查看详情</td></tr>
+        <tr><td>工作台页</td><td>顶部对象条 + 左配置 + 右运行/试跑</td><td>高</td><td>保存版本、试跑、发布、回滚</td></tr>
+        <tr><td>会话页</td><td>标题 + 会话轨 + 主对话区</td><td>中高</td><td>新建、切换、输入、技能选择</td></tr>
+        <tr><td>成员/权限页</td><td>标题 + 操作条 + 表格</td><td>中</td><td>添加、改角色、移除</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow">05 · Components</div>
+        <h2>基础组件规范</h2>
+        <p class="sec-copy">基于 Ant Design 5，但必须按本规范覆写密度、圆角、颜色。不要直接套 AntD 默认“大白卡 + 大按钮”的观感。</p>
+      </div>
+      <span class="tag">AntD override</span>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">按钮</div>
+        <div class="button-row">
+          <span class="btn btn-primary">主操作</span>
+          <span class="btn">默认</span>
+          <span class="btn btn-text">文本操作</span>
+          <span class="btn btn-danger">删除</span>
+        </div>
+        <p class="card-copy" style="margin-bottom:0;">高度 30px，圆角 5px。主按钮使用 #0F172A，不用蓝色实底，蓝色留给链接和选中态。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">输入与筛选</div>
+        <div class="button-row"><span class="input">搜索 Agent 名称 / 描述</span><span class="btn">Live 状态</span><span class="seg"><span class="on">JSON</span><span>YAML</span></span></div>
+        <p class="card-copy" style="margin-bottom:0;">控件高度 30px。筛选器横向排列，标签要短；复杂筛选进入 Popover 或 Drawer。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">标签、状态、码片</div>
+        <div class="chip-row">
+          <span class="tag tag-blue">Claude Code</span>
+          <span class="tag tag-ok">已发布</span>
+          <span class="tag tag-warn">部署中</span>
+          <span class="tag tag-danger">失败</span>
+          <span class="tag mono">agent-a1</span>
+        </div>
+        <p class="card-copy" style="margin-bottom:0;">标签只表达短状态或分类。ID、模型名、端点、版本号使用等宽字体。</p>
+      </div>
+      <div class="card">
+        <div class="card-title">表格</div>
+        <p class="card-copy">表头 11px uppercase，正文 12-13px，行内主信息加粗。默认无斑马纹，依靠发丝分割。操作列固定在右侧，按钮文字必须说明动作。</p>
+      </div>
+    </div>
+    <div class="rule"></div>
+    <table>
+      <thead><tr><th>组件</th><th>视觉规范</th><th>交互规范</th></tr></thead>
+      <tbody>
+        <tr><td>Drawer</td><td>白底、1px 左边界、标题 16px/700，内容分区用浅描边。</td><td>承载版本历史、配置预览、复杂选择；不要用于单个确认。</td></tr>
+        <tr><td>Modal</td><td>圆角 6px，标题短，正文直接进入选择控件。</td><td>用于发布选择、注册资源、危险确认。</td></tr>
+        <tr><td>Popover</td><td>只承载轻量解释或小型表单。</td><td>不要放复杂配置树。</td></tr>
+        <tr><td>Empty</td><td>小型空状态，提供下一步按钮或建议。</td><td>不要在大面积区域只显示“暂无数据”。</td></tr>
+        <tr><td>Tooltip</td><td>解释图标按钮或短状态，不替代正文。</td><td>用户必须不看 tooltip 也能完成主流程。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow">06 · Agent Operation Patterns</div>
+        <h2>Agent 列表与工作台模式</h2>
+        <p class="sec-copy">Agent 是平台核心。列表页解决“我该管理哪个 Agent”，工作台解决“创建、调试、发布、更新、回滚”。两者不要混在一个页面里。</p>
+      </div>
+      <span class="tag">核心页面</span>
+    </div>
+
+    <div class="card-title">Agent Operations 列表示例</div>
+    <div class="preview-shell" style="margin-bottom:14px;">
+      <div style="padding:10px 12px; border-bottom:1px solid var(--line-strong); display:flex; gap:8px; align-items:center; background:#fff;">
+        <span class="input">搜索名称 / 描述</span>
+        <span class="btn">Owner</span>
+        <span class="btn">Live</span>
+        <span class="btn">Draft</span>
+        <span style="flex:1;"></span>
+        <span class="mini-note">共 12 个</span>
+      </div>
+      <div class="agent-row" style="background:var(--surface-rail); color:var(--ink-500); font-size:11px; font-weight:760; text-transform:uppercase;">
+        <div>Agent</div><div>Owner</div><div>Live</div><div>Draft</div><div>Action</div>
+      </div>
+      <div class="agent-row">
+        <div style="display:flex; gap:10px; min-width:0;"><div class="agent-avatar">A</div><div style="min-width:0;"><div class="name-main">需求分析助手</div><div class="name-sub">agent-a1 · Claude Code · 更新 06-27</div></div></div>
+        <div><span style="font-weight:650;color:var(--ink-700);">Helena</span></div>
+        <div><span class="dot run"></span> <span style="font-weight:650;">运行中</span><div class="mini-note">Live v2 · 共享 L1</div></div>
+        <div><span class="tag tag-ok">同步 Live</span><div class="mini-note">Head v2</div></div>
+        <div><span class="btn">管理</span></div>
+      </div>
+      <div class="agent-row">
+        <div style="display:flex; gap:10px; min-width:0;"><div class="agent-avatar">A</div><div style="min-width:0;"><div class="name-main">客服一线应答</div><div class="name-sub">agent-a3 · OpenClaw · 更新 06-28</div></div></div>
+        <div><span style="font-weight:650;color:var(--ink-700);">李产品</span></div>
+        <div><span class="dot warn"></span> <span style="font-weight:650;">已停止</span><div class="mini-note">Live v2 · 独立 L2</div></div>
+        <div><span class="tag tag-blue">Head 较新</span><div class="mini-note">Head v3 / Live v2</div></div>
+        <div><span class="btn">管理</span></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">列表字段规则</div>
+        <ul class="spec-list">
+          <li>必须展示：Agent、Owner、Live、Draft、Action。</li>
+          <li>Agent 单元格包含名称、描述或 id、框架、更新时间。</li>
+          <li>Live 单元格展示发布/运行状态、Live 版本、部署方式。</li>
+          <li>Draft 单元格展示 Head 与 Live 的关系，不暗示必须发布。</li>
+          <li>不展示模型。模型属于配置详情，不是列表主决策字段。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-title">列表交互规则</div>
+        <ul class="spec-list">
+          <li>只有“管理”进入工作台，不使用整行点击。</li>
+          <li>KPI 只表达事实：ALL、PUBLISHED、RUNNING、ATTENTION。</li>
+          <li>不要出现 Needs publish、Change 这类替用户判断或有歧义的字段。</li>
+          <li>搜索覆盖名称和描述；筛选覆盖 Owner、Live、Draft。</li>
+          <li>默认按 updatedAt 倒序。</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rule"></div>
+    <div class="card-title">Agent 工作台模式</div>
+    <div class="workbench">
+      <div class="panel">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;"><div class="page-title" style="font-size:18px;">需求分析助手</div><span class="tag tag-blue">Claude Code</span></div>
+        <div class="field-row"><div class="field-label">框架</div><div><span class="seg"><span class="on">Claude Code</span><span>OpenClaw</span></span></div></div>
+        <div class="field-row"><div class="field-label">模型</div><div><span class="input">claude-sonnet-4-6</span></div></div>
+        <div class="panel" style="margin-top:10px;">
+          <div class="panel-title">指令文件 · claude.md</div>
+          <pre class="codebox mono"># 需求分析助手
+
+## 目标
+- 把对话整理成结构化 spec
+- 主动追问边界与异常</pre>
+        </div>
+        <div class="panel" style="margin-top:10px;">
+          <div class="panel-title">能力绑定</div>
+          <div class="chip-row" style="margin-top:8px;"><span class="tag tag-blue">web_search</span><span class="tag">file_read</span><span class="tag">需求分析</span></div>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:10px; min-width:0;">
+        <div class="panel">
+          <div class="panel-title">线上发布与运行</div>
+          <table style="margin-top:10px;">
+            <tbody>
+              <tr><td>Head</td><td><b>v3</b><div class="mini-note">最新已保存版本</div></td></tr>
+              <tr><td>Live</td><td><b>v2</b><div class="mini-note">共享 L1 · 稳定地址</div></td></tr>
+              <tr><td>Runtime</td><td><span class="dot run"></span> 运行中<div class="mini-note">本地服务运行中</div></td></tr>
+            </tbody>
+          </table>
+          <div class="button-row" style="margin-top:10px;"><span class="btn btn-primary">发布 v3</span><span class="btn">版本历史</span><span class="btn">停服</span></div>
+        </div>
+        <div class="panel" style="flex:1;">
+          <div class="panel-title">试跑当前配置</div>
+          <div class="codebox mono" style="margin-top:10px; min-height:120px;">User: 帮我整理这个需求
+Agent: 我会先确认目标、边界和验收条件。</div>
+        </div>
+      </div>
+    </div>
+    <div class="rule"></div>
+    <table>
+      <thead><tr><th>区域</th><th>必须保持</th><th>原因</th></tr></thead>
+      <tbody>
+        <tr><td>顶部对象条</td><td>返回、名称、框架、Head/Live 提示、保存按钮集中。</td><td>让用户知道当前在编辑哪个对象和哪个版本关系。</td></tr>
+        <tr><td>左侧配置</td><td>基本信息、框架/模型、配置文件、工具/技能绑定。</td><td>这是“创建和更新”的主工作区。</td></tr>
+        <tr><td>右侧运行</td><td>线上发布与运行面板必须在上方，试跑在下方。</td><td>发布和运行状态是 Agent 的最终结果，不能被配置预览挤掉。</td></tr>
+        <tr><td>版本历史</td><td>进入 Drawer，清楚标记 Head、Live、历史版本。</td><td>回滚需要可发现，但不占用主编辑区。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow">07 · Conversation Patterns</div>
+        <h2>Chat、Playground 与会话页</h2>
+        <p class="sec-copy">所有对话页面都采用“会话轨 + 主对话区 + 底部输入区”。输入框下方不得出现无意义大空白；空白必须用于消息区域或空状态建议。</p>
+      </div>
+      <span class="tag">Conversation UI</span>
+    </div>
+    <div class="chat-layout">
+      <div class="chat-rail">
+        <div class="rail-toolbar">
+          <div>
+            <div class="rail-title">会话</div>
+            <div class="rail-count">3 条</div>
+          </div>
+          <span class="rail-new">+ 新建</span>
+        </div>
+        <div class="session-item active">整理 Agent 需求</div>
+        <div class="session-item">发布流程确认</div>
+        <div class="session-item">Skill 创建</div>
+      </div>
+      <div class="chat-main">
+        <div class="chat-body">
+          <div class="card" style="max-width:720px; margin:0 auto;">
+            <div class="card-title">从一个明确动作开始</div>
+            <div class="card-copy">这里不是闲聊页，更像平台操作入口。你可以让通用 Agent 查询、创建、发布 Agent，或把模糊诉求收敛成需求。</div>
+            <div class="grid-2" style="margin-top:12px;">
+              <div class="card">创建一个客服 Agent</div>
+              <div class="card">列出运行失败的 Agent</div>
+            </div>
+          </div>
+        </div>
+        <div class="composer">
+          <div class="chip-row" style="margin-bottom:8px;"><span class="tag tag-blue">/agent-creator</span><span class="mini-note">按 / 选择内置技能</span></div>
+          <div class="input" style="width:100%; min-width:0;">输入消息，或 / 选择技能</div>
+        </div>
+      </div>
+    </div>
+    <div class="rule"></div>
+    <div class="grid-3">
+      <div class="card">
+        <div class="card-title">Chat</div>
+        <div class="card-copy">平台统一入口。标题区说明当前是否连接后端通用 Agent；左侧会话轨支持新建、切换、重命名、删除。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Playground</div>
+        <div class="card-copy">只对已发布 Agent 的 Live 版本对话。顶部选择 Agent，显示名称、Live 版本、框架；模型只可作为次级信息。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">会话控制台</div>
+        <div class="card-copy">偏审计和检索，采用列表 + 详情，不做聊天式输入。按创建人、Agent、状态、时间筛选。</div>
+      </div>
+    </div>
+    <div class="rule"></div>
+    <table>
+      <thead><tr><th>元素</th><th>规范</th><th>注意</th></tr></thead>
+      <tbody>
+        <tr><td>会话轨</td><td>宽 210-252px，背景 #F8FAFC，顶部为“标题/数量 + 小号新建按钮”。active 使用 #E8EEF7。</td><td>不要使用整宽深色主按钮；新建会话是轻量 rail action，不是页面主 CTA。</td></tr>
+        <tr><td>消息区</td><td>flex:1，负责吸收剩余高度；空状态居中但不撑大输入区。</td><td>消息少时也不能让输入框底部出现大片空白。</td></tr>
+        <tr><td>输入区</td><td>固定在底部，padding 10px 16px 12px，顶部 1px 分割线。</td><td>输入区高度随内容自然变化，最大高度需要限制。</td></tr>
+        <tr><td>建议卡片</td><td>2 列紧凑建议，12.5px 文本。</td><td>建议必须是可执行动作，不写功能介绍文案。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow">08 · Resource And Admin Pages</div>
+        <h2>部署、Skill、MCP、成员页模式</h2>
+        <p class="sec-copy">非 Agent 核心页仍然保持同一套控制台语言。根据任务类型选择表格、紧凑卡片或分栏详情，不要把每个页面做成独立视觉。</p>
+      </div>
+      <span class="tag">Page recipes</span>
+    </div>
+    <table>
+      <thead><tr><th>页面</th><th>推荐结构</th><th>主信息</th><th>主操作</th></tr></thead>
+      <tbody>
+        <tr><td>部署</td><td>标题 + 运行概览 + 服务表格 + 发布/变更 Modal</td><td>Agent、稳定地址、Live 版本、部署方式、运行态。</td><td>管理、停服、重启、变更版本/部署方式。</td></tr>
+        <tr><td>Skill</td><td>标题 + 上传/筛选工具栏 + 表格或紧凑资源卡 + 文件树详情</td><td>名称、来源、描述、启用状态、文件数量、更新时间。</td><td>上传、查看、启用/禁用、删除。</td></tr>
+        <tr><td>MCP</td><td>标题 + 注册工具栏 + 表格 + 详情 Modal</td><td>名称、命令、分类、来源、启用状态、环境变量要求。</td><td>注册、查看配置、启用/禁用、删除。</td></tr>
+        <tr><td>成员与权限</td><td>标题 + 添加成员条 + 表格</td><td>成员、角色、空间、最近操作。</td><td>添加、改角色、移除。</td></tr>
+        <tr><td>环境</td><td>状态面板 + 表格/键值列表</td><td>后端连接、运行引擎、API 状态、沙箱信息。</td><td>检查、复制、清理。</td></tr>
+      </tbody>
+    </table>
+    <div class="rule"></div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">资源页资源卡</div>
+        <div class="card-copy">只有当资源说明需要多行阅读时使用卡片。卡片圆角 6px、边框 #DFE3EA、padding 12px，不要放大图标和装饰色块。</div>
+      </div>
+      <div class="card">
+        <div class="card-title">资源页表格</div>
+        <div class="card-copy">当资源超过 6 个或需要筛选排序时优先表格。操作列固定右侧，危险操作进入 Popconfirm。</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow">09 · State And Feedback</div>
+        <h2>状态、反馈与微交互</h2>
+        <p class="sec-copy">状态文案要说明事实和下一步，不要只给颜色。失败要展示错误原因，部署中要说明预计耗时或轮询状态。</p>
+      </div>
+      <span class="tag">Runtime states</span>
+    </div>
+    <div class="grid-4">
+      <div class="card"><div class="card-title"><span class="dot"></span> 未发布</div><div class="card-copy">无 Live。提供“发布 vN”而不是“启动”。</div></div>
+      <div class="card"><div class="card-title"><span class="dot run"></span> 运行中</div><div class="card-copy">显示 Live 版本、部署方式、稳定地址。</div></div>
+      <div class="card"><div class="card-title"><span class="dot warn"></span> 部署中</div><div class="card-copy">禁用重复操作，显示自动刷新或预计耗时。</div></div>
+      <div class="card"><div class="card-title"><span class="dot fail"></span> 失败</div><div class="card-copy">展示错误原因，提供重新发布或查看详情。</div></div>
+    </div>
+    <div class="rule"></div>
+    <table>
+      <thead><tr><th>场景</th><th>反馈方式</th><th>文案要求</th></tr></thead>
+      <tbody>
+        <tr><td>保存成功</td><td>message.success</td><td>“已保存为 v3”，必须包含版本结果。</td></tr>
+        <tr><td>发布成功</td><td>message.success + 右侧状态刷新</td><td>“已发布 v3 · 共享 L1”，必须包含 Live 和部署方式。</td></tr>
+        <tr><td>未保存改动</td><td>禁用发布按钮 + inline hint</td><td>“先保存为新版本，再选择是否发布”。</td></tr>
+        <tr><td>回滚</td><td>Modal/Drawer 明确两条路径</td><td>区分“回滚为新版本”和“直接发布历史版本”。</td></tr>
+        <tr><td>删除</td><td>Popconfirm</td><td>说明是软删除还是永久删除。</td></tr>
+        <tr><td>后端不可用</td><td>页面 subtitle 或状态 tag</td><td>说明“未连后端 · 本地 mock”，不要静默假装真实。</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow">10 · Implementation Checklist</div>
+        <h2>新页面落地检查清单</h2>
+        <p class="sec-copy">每做一个新页面或大改一个页面，按这个清单过一遍。SPEC 决定做什么，本文件决定看起来和交互方式是否一致。</p>
+      </div>
+      <span class="tag">DoD for UI</span>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">视觉检查</div>
+        <ul class="spec-list">
+          <li>页面是否使用统一 Shell：236px 侧栏、48px 顶栏、#F6F7F9 内容底。</li>
+          <li>是否只使用 tokens 中的颜色、圆角、字号。</li>
+          <li>是否避免大圆角、大阴影、大面积蓝色、营销式标题。</li>
+          <li>表格、工具栏、面板是否保持高密度。</li>
+          <li>文本是否没有溢出、重叠、被按钮挤压。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-title">交互检查</div>
+        <ul class="spec-list">
+          <li>一个功能是否只有一个清晰主入口。</li>
+          <li>主操作是否写明结果，例如“发布 v3”而不是“发布”。</li>
+          <li>空状态是否给出下一步，而不是只写“暂无”。</li>
+          <li>危险操作是否二次确认。</li>
+          <li>移动或窄屏下是否变为单列，不出现横向挤压。</li>
+        </ul>
+      </div>
+    </div>
+    <div class="rule"></div>
+    <div class="card">
+      <div class="card-title">和 SPEC 的关系</div>
+      <div class="card-copy">功能字段、流程、状态语义以 `产品文档/specs/` 为准；视觉层级、组件样式、页面骨架以本文件为准。如果实现时发现 SPEC 需要一个新页面模式，先补本视觉规范，再写代码。</div>
+    </div>
+  </section>
+
+  <div style="padding:16px 0 0; color:var(--ink-350); font-size:12px; text-align:center;">AISpace Visual System Specification · v2 · last amended 2026-06-28</div>
 
 </div>
 </div>

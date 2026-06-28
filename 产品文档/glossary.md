@@ -4,8 +4,8 @@
 > 同一个概念全链路只用同一个词；新增/修改术语必须先改这里，再改代码和 spec。
 
 ## 版本
-- last amended: 2026-06-26
-- version: 3（框架运行时术语精简为产品级，实现细节移交技术文档）
+- last amended: 2026-06-28
+- version: 4（补齐 Agent Operations / Head / Live / Draft / 部署方式等当前产品术语）
 
 ---
 
@@ -16,9 +16,12 @@
 | 智能体 | Agent | 平台管理的 AI 智能体，具有特定的框架、模型、配置文件、工具和技能配置 |
 | 框架 | Framework | Agent 运行的底层框架类型，不同框架有不同的配置文件模板（如 Claude Code 用 `claude.md`，OpenClaw 用 `user.md`/`agent.md`） |
 | 配置文件 | ConfigFile | 框架特定的 Markdown 配置文件，定义 Agent 的行为、角色和能力 |
-| MCP 工具 | Tool (MCP Tool) | Agent 可调用的外部工具能力，分为系统工具（SystemTool）和自定义工具（CustomTool）两类，每个工具带 MCP 标签和版本标签 |
-| 技能 | Skill | Agent 具备的高级能力模块，按分类组织 |
+| MCP 工具 | Tool (MCP Tool) | Agent 可调用的外部工具能力，可来自系统工具或当前空间注册的 MCP；绑定到 Agent 后进入运行时工具集 |
+| 技能 | Skill | Agent 具备的高级能力模块；可来自内置 skill 或当前空间上传的 `SKILL.md` 技能包 |
 | 版本 | Version | Agent 配置的快照记录，每次保存/更新生成新版本（v1、v2…） |
+| Head 版本 | HeadVersion | Agent 当前最新已保存配置版本；编辑保存后生成新的 Head |
+| Live 版本 | LiveVersion | 当前线上发布所指向的版本；可能落后于 Head，也可能直接指向某个历史版本 |
+| Draft 状态 | DraftStatus | Agent 列表上的版本关系状态，表示 Head 与 Live 是否一致；不是“保存草稿”功能 |
 | 配置预览 | ConfigPreview | 将 Agent 所有配置项合并生成的结构化配置文件（JSON/YAML），只读 |
 | 资产权限 | AssetPermission | 用户对资产（Agent/Skill/Tool）的访问权限，在「项目空间 + 角色 + 资产」维度下判定 |
 
@@ -44,6 +47,8 @@
 |---|---|---|
 | 框架适配 | Adapter | 让发布/服务/对话主流程支撑不同框架的适配层——新增框架=加一个适配，不改主流程。具体每框架"怎么跑"属实现 |
 | 运行服务 | Service | 「已发布 Agent 的运行态」，对外暴露统一的对话/调用接口（运行中 / 已停止） |
+| 发布 | Publish | 将某个已保存版本设为 Live，并按所选部署方式启动或替换运行服务 |
+| 部署方式 | DeploymentMode / Isolation | Live 运行服务的运行形态选择：共享 L1、独立 L2、即用即弃 L3；L0 租户隔离始终生效，不是用户可选项 |
 | 全局默认模型 / 每 Agent 模型 | default model / per-agent model | 某框架运行时的兜底默认模型 vs 单个 Agent 覆盖的模型（支持同框架多 Agent 各用各的模型） |
 
 ## 框架枚举（Framework）
@@ -61,8 +66,9 @@
 |---|---|---|
 | 锁定状态 | Locked | 无权限资产的展示状态（灰色 + 锁定图标，不可勾选） |
 | 抽屉 | Drawer | 工具/技能选择的侧滑面板 |
-| 分步表单 | StepForm / Wizard | 创建 Agent 的分步骤表单 |
-| 折叠面板 | Collapse Panel | 配置预览所在的可折叠容器 |
+| Agent Operations | AgentOperations | Agent 列表运营页，用于扫视负责人、Live 状态、部署方式、Draft 状态和异常项 |
+| Agent 工作台 | AgentWorkbench | 创建、编辑、调试、发布、版本与回滚的统一操作界面 |
+| 双栏 Builder | Builder | Agent 工作台的主布局：左侧配置，右侧线上发布与运行、试跑 |
 | 等宽字体文本域 | Monospace Editor | 配置文件编辑用的等宽字体编辑器（如 Monaco） |
 
 ---

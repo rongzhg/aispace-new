@@ -1,6 +1,6 @@
 import dayjs from "dayjs";
 
-export const ACCENT = '#4F46E5';
+export const ACCENT = '#2563EB';
 /* ---------------- 静态配置 ---------------- */
 export const FRAMEWORKS = [
   { key: 'CLAUDE_CODE', name: 'Claude Code', enabled: true },
@@ -72,23 +72,23 @@ export function mkAgent(id, wsId, snaps, times) {
   return { id, wsId, version: versions.length, updatedAt: times[times.length - 1], deleted: false, ...cur, versions };
 }
 export const INIT_AGENTS = [
-  mkAgent('a1', 'w1', [
+  { ...mkAgent('a1', 'w1', [
     { name: '需求分析助手', desc: '把用户对话整理成需求', framework: 'CLAUDE_CODE', model: 'claude-haiku-4-5', params: { temperature: 0.7, max_tokens: 4096 }, tools: ['t1'], skills: ['s1'],
       files: { 'claude.md': '# 需求分析助手\n\n## 角色\n你是需求分析助手。\n\n## 目标\n- 把对话整理成需求\n' } },
     { name: '需求分析助手', desc: '把用户对话整理成结构化需求', framework: 'CLAUDE_CODE', model: 'claude-sonnet-4-6', params: { temperature: 0.5, max_tokens: 4096 }, tools: ['t1', 't3'], skills: ['s1'],
       files: { 'claude.md': '# 需求分析助手\n\n## 角色\n你是资深需求分析助手，擅长澄清模糊需求。\n\n## 目标\n- 把对话整理成结构化 spec\n- 主动追问边界与异常\n\n## 输出风格\n- 用 EARS 句式描述验收条件\n' } },
-  ], [td(6), td(1)]),
-  mkAgent('a2', 'w1', [
+  ], [td(6), td(1)]), creator: 'u0' },
+  { ...mkAgent('a2', 'w1', [
     { name: '数据洞察 Bot', desc: '业务数据分析与可视化', framework: 'OPENCLAW', model: 'qwen3.6-plus', params: { temperature: 0.7, max_tokens: 8192 }, tools: ['t2'], skills: ['s2', 's4'], files: { ...TEMPLATES.OPENCLAW } },
-  ], [td(4)]),
-  mkAgent('a3', 'w2', [
+  ], [td(4)]), creator: 'u1' },
+  { ...mkAgent('a3', 'w2', [
     { name: '客服一线应答', desc: '客服自动应答', framework: 'CLAUDE_CODE', model: 'claude-haiku-4-5', params: { temperature: 0.7, max_tokens: 2048 }, tools: ['t1'], skills: [],
       files: { 'claude.md': '# 客服应答\n\n## 角色\n你是客服。\n' } },
     { name: '客服一线应答', desc: '客服场景自动应答', framework: 'CLAUDE_CODE', model: 'yufeng-vl', params: { temperature: 0.6, max_tokens: 4096 }, tools: ['t1', 't6'], skills: ['s1'],
       files: { 'claude.md': '# 客服应答\n\n## 角色\n你是耐心专业的一线客服。\n\n## 约束\n- 不承诺无法兑现的服务\n' } },
     { name: '客服一线应答', desc: '客服场景自动应答', framework: 'CLAUDE_CODE', model: 'yufeng-vl', params: { temperature: 0.6, max_tokens: 4096 }, tools: ['t1', 't6'], skills: ['s1'],
       files: { 'claude.md': '# 客服应答\n\n## 角色\n你是耐心专业的一线客服，优先安抚情绪再解决问题。\n\n## 约束\n- 不承诺无法兑现的服务\n- 涉及退款一律转人工\n' } },
-  ], [td(10), td(3), td(0)]),
+  ], [td(10), td(3), td(0)]), creator: 'u2' },
 ];
 
 /* ---------------- 通用小组件 ---------------- */

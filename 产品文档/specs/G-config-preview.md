@@ -1,8 +1,8 @@
 ---
 name: 配置预览与导出
-last amended: 2026-06-24
-version: 1
-description: 合并生成结构化配置（JSON/YAML）只读预览，及导出下载
+last amended: 2026-06-28
+version: 2
+description: Agent 工作台内的结构化配置只读预览（JSON/YAML）与导出下载
 ---
 
 # 配置预览与导出 Feature Specification
@@ -12,22 +12,23 @@ description: 合并生成结构化配置（JSON/YAML）只读预览，及导出�
 
 ## MODIFIED Requirements
 
-### Requirement: 配置预览 ✅已确认
-> 位置更新：预览不再单独占节点/折叠面板，而是 **Builder 右栏的一个 Tab**（与「调试」并列，默认收起，按需展开）。
+### Requirement: 配置预览 🔸MVP
+> 位置更新：预览是 Agent 工作台的**次级工具入口**，不得挤占右侧「线上发布与运行 / 试跑」主区域。可用 Drawer / Modal / Tab 承载，核心要求是随当前配置实时生成、只读、可切换 JSON/YAML。
 
 **User Story:** 作为项目成员，我希望随时预览 Agent 所有配置项合并后的结构化配置，以便确认最终生成的内容正确。
 
 #### Acceptance Criteria
-1. WHERE 创建/编辑 Builder 右栏 系统 SHALL 提供「配置预览」Tab，内含只读代码块
+1. WHERE Agent 工作台 系统 SHALL 提供「配置预览」入口，内含只读代码块
 2. WHEN 用户修改任意配置项(基本信息/配置文件/模型/工具/技能) THEN 系统 SHALL 实时更新预览内容
 3. WHERE 预览为结构化配置 系统 SHALL 以 JSON / YAML 呈现且只读，提供 JSON/YAML 切换
-4. WHEN 用户收起/展开右栏 THEN 系统 SHALL 保持其内容状态
+4. WHERE 配置预览打开/关闭 系统 SHALL 保持工作台当前编辑状态，不触发保存、不生成版本、不影响试跑
+5. WHERE 工作台右侧空间有限 系统 SHALL 优先保障「线上发布与运行」和「试跑」，配置预览不得造成主流程信息拥挤
 
 #### 引用 / 影响
 - 术语：ConfigPreview, Agent, Tool, Skill, ConfigFile
-- 组件：Tabs(右栏)、只读代码块、Segmented(JSON/YAML)
+- 组件：Drawer/Modal/Tab、只读代码块、Segmented(JSON/YAML)
 - 现有功能：聚合 A/B/C/D/E 的配置
-- 设计决策：预览降级为右栏 Tab（与调试同栏），不单独占步骤/面板
+- 设计决策：预览降级为次级工具，不再作为工作台右栏常驻主面板
 
 #### 待确认 / 假设
 - 已定：提供 JSON/YAML 切换

@@ -1,8 +1,8 @@
 ---
 name: MCP 工具
-last amended: 2026-06-27
-version: 5
-description: 工具选择抽屉、MCP 市场（仅用户注册/卡片/详情看标准 mcpServers 配置/空间归属）、自定义工具接入、工具版本
+last amended: 2026-06-28
+version: 6
+description: 工具选择抽屉、MCP 页面（注册/卡片/详情看标准 mcpServers 配置/空间归属）、自定义工具接入、工具版本
 ---
 
 # MCP 工具 Feature Specification
@@ -33,20 +33,20 @@ description: 工具选择抽屉、MCP 市场（仅用户注册/卡片/详情看�
 
 ---
 
-### Requirement: MCP 市场 🔸MVP
-**User Story:** 作为项目成员，我希望在「市场」里**注册**自定义 MCP 接口（填写命令/参数/凭证），以便创建/编辑本空间 Agent 时能直接选用。
+### Requirement: MCP 页面 🔸MVP
+**User Story:** 作为项目成员，我希望在「MCP」页面里**注册**自定义 MCP 接口（填写命令/参数/凭证），以便创建/编辑本空间 Agent 时能直接选用。
 
 > 关键约定：
-> - 平台**只承载用户自己注册的 MCP**，不内置、不展示任何内置/公共目录的 MCP 工具。
+> - MCP 页面**只承载用户自己注册的 MCP**，不展示公共目录；Agent 工具选择抽屉仍可展示平台系统工具（如 web_search/code_runner）与空间注册 MCP。
 > - **注册的 MCP 归属于操作时所在的空间(Workspace)**，仅该空间的 Agent 可见可选；空间之间互不可见。
 
 #### Acceptance Criteria
-1. WHERE 平台导航 系统 SHALL 提供「市场」入口，内含「MCP 市场」与「技能市场」两个分区，并显示当前空间
-2. WHERE MCP 市场 系统 SHALL 提供「注册 MCP」按钮，并以**卡片**列出本空间已注册的 MCP（每张含名称、用途、分类、命令预览、所需凭证及「详情/删除」）
+1. WHERE 平台导航 系统 SHALL 提供独立「MCP」入口，并在页面内显示当前空间
+2. WHERE MCP 页面 系统 SHALL 提供「注册 MCP」按钮，并以**卡片**列出本空间已注册的 MCP（每张含名称、用途、分类、命令预览、所需凭证及「详情/删除」）
 3. WHEN 用户「注册 MCP」并填写名称、用途、启动命令、参数、所需环境变量（凭证名）等 THEN 系统 SHALL 校验必填项（名称、命令）后登记进**当前空间**的工具目录，并在该空间创建/编辑 Agent 的工具选择中可见、可选
 4. WHEN 用户点击某 MCP 卡片的「详情」 THEN 系统 SHALL 展示其**标准 mcpServers 配置**（MCP 协议形态：stdio 的 type/command/args/env；远程为 type:http + url + headers）及分类、来源、所需环境变量、主页，可一键复制
 5. WHEN 用户删除某 MCP THEN 系统 SHALL 仅从当前空间的工具目录移除（其它空间与已选用它的 Agent 配置不受追溯影响）
-6. WHERE 任意工具列表 / Agent 工具选择 系统 SHALL **只展示用户注册的 MCP**，不得出现内置/目录工具或 mock 工具
+6. WHERE MCP 页面 系统 SHALL 只展示当前空间注册的 MCP；WHERE Agent 工具选择抽屉 系统 MAY 同时展示系统工具与当前空间注册 MCP，但不得展示其它空间的 MCP
 7. WHERE 同一 MCP 在不同空间 系统 SHALL 允许各空间独立注册/删除、互不影响
 
 #### 引用 / 影响
@@ -55,7 +55,7 @@ description: 工具选择抽屉、MCP 市场（仅用户注册/卡片/详情看�
 - 设计决策：MCP Server 目录来源、连接信息（命令/参数/凭证）的存储与导出、空间隔离的落库方式等实现细节见 ../../技术文档/
 
 #### 待确认 / 假设
-- 已定：加入/注册/移出为项目成员自助；归属空间；目录含官方与社区 MCP Server；支持自定义注册
+- 已定：注册/移出为项目成员自助；归属空间；MCP 页面不再作为“市场总入口”，而是独立导航
 - ⬜后续：注册/加入时校验连通性并真正拉取工具清单（见下「自定义工具接入」）；凭证（token）的安全托管；导出为 Agent 工作目录的 .mcp.json
 
 ---

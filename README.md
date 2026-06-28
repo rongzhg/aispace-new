@@ -18,7 +18,7 @@
 
 ```
 产品文档/        做什么——开发 vibe coding 主要参考
-  specs/         功能需求 + EARS 验收标准（A–K）
+  specs/         功能需求 + EARS 验收标准（A–N）
   glossary.md    统一术语表
   spec-template.md  spec 写作规范
   视觉规范.dc.html  权威视觉规范

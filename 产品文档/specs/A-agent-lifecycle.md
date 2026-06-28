@@ -1,8 +1,8 @@
 ---
 name: Agent 生命周期管理
-last amended: 2026-06-24
-version: 2
-description: Agent 的列表、详情、创建、编辑、复制、删除等全生命周期操作
+last amended: 2026-06-28
+version: 3
+description: Agent Operations 列表、Agent 工作台、创建、编辑、删除等全生命周期操作
 ---
 
 # Agent 生命周期管理 Feature Specification
@@ -12,27 +12,29 @@ description: Agent 的列表、详情、创建、编辑、复制、删除等全�
 
 ## MODIFIED Requirements
 
-### Requirement: Agent 列表 ✅已确认
-**User Story:** 作为项目成员，我希望以高密度行卡片查看、搜索、排序我有权限的 Agent，以便快速找到并进入某个 Agent。
+### Requirement: Agent Operations 列表 ✅已确认
+**User Story:** 作为项目成员，我希望以高密度运营列表查看当前空间的 Agent，以便快速判断负责人、线上状态、发布方式、草稿关系和下一步操作。
 
 #### Acceptance Criteria
-1. WHEN 用户进入平台首页 THEN 系统 SHALL 以**行卡片列表**展示**当前空间内**、当前用户有权限的 Agent，每张卡片含：图标、名称、当前版本号、**发布状态**、描述、框架、模型、最后更新时间、悬浮操作
-1a. WHEN 用户切换当前空间(见 Spec K) THEN 系统 SHALL 刷新列表为新空间内的 Agent
-1b. WHERE Agent 已发布 系统 SHALL 显示「已发布 vN」（绿色），否则「未发布」（灰色）；N 为已发布版本号，可能低于当前版本
-1c. WHERE Agent 已发布 系统 SHALL 追加服务运行态「● 运行中」/「○ 已停止」（见 Spec I 运行服务）
-2. WHEN 用户在搜索框输入关键词 THEN 系统 SHALL 按名称实时过滤
-3. WHEN 用户切换排序方式 THEN 系统 SHALL 支持按「最近编辑」和「名称」排序
-4. WHEN 列表为空 THEN 系统 SHALL 展示空状态与"创建 Agent"引导
-5. WHEN 用户点击某张卡片 THEN 系统 SHALL 导航至该 Agent 详情页（整卡可点）
-6. WHERE 卡片悬浮操作 系统 SHALL 提供：编辑、删除（操作区点击不触发整卡跳转）
-7. WHEN 用户点击「编辑」 THEN 系统 SHALL 导航至编辑页
-8. WHEN 用户点击「删除」 THEN 系统 SHALL 二次确认后对该 Agent 执行软删除（见删除需求）
+1. WHEN 用户进入 Agent 页 THEN 系统 SHALL 展示当前空间的 **Agent Operations** 列表，默认按「最近编辑」倒序
+2. WHERE 列表顶部 系统 SHALL 展示 4 个运营指标：ALL AGENTS、PUBLISHED LIVE、RUNNING LIVE、ATTENTION；不得用「Needs publish」等替用户做发布判断的指标
+3. WHERE 每行 Agent 系统 SHALL 展示：名称、描述、Agent id、框架、最近更新时间、创建人/负责人、Live 状态、Draft 状态、操作入口
+4. WHERE Agent 行 系统 SHALL **不展示大模型字段**；模型属于配置详情，不是列表页主决策信息
+5. WHERE Live 状态 系统 SHALL 展示该 Agent 是否未发布、运行中、已停止、部署中或失败，并在二级信息中展示 Live 版本与部署方式（如 共享(L1)、独立(L2)）
+6. WHERE Draft 状态 系统 SHALL 展示 Head 与 Live 的关系：仅草稿、与 Live 一致、与 Live 不同；该状态只是事实陈述，不等价于“必须发布”
+7. WHEN 用户切换当前空间(见 Spec K) THEN 系统 SHALL 刷新列表为新空间内的 Agent，并清空搜索/过滤条件
+8. WHEN 用户在搜索框输入关键词 THEN 系统 SHALL 按名称或描述实时过滤
+9. WHEN 用户使用过滤器 THEN 系统 SHALL 支持按创建人过滤、按 Live 状态过滤、按「Draft 与 Live 不同」过滤
+10. WHEN 用户切换排序方式 THEN 系统 SHALL 支持按「最近编辑」和「名称」排序
+11. WHEN 列表为空 THEN 系统 SHALL 展示空状态与「创建 Agent」引导
+12. WHERE Agent 行 系统 SHALL 不把整行点击作为进入入口；进入工作台仅通过明确的「管理」按钮，避免与行选择/表格操作产生歧义
+13. WHERE 行操作区 系统 SHALL 提供「管理」与「删除」；删除需二次确认并执行软删除（见删除需求）
 
 #### 引用 / 影响
-- 术语：Agent, Framework, Version, Workspace
-- 组件：行卡片（见组件库）、Input.Search、Select(排序)、Tag、Empty、Popconfirm
-- 现有功能：新增；作用域为当前空间(见 Spec K)；发布状态/运行态见 Spec I
-- 设计决策：列表用行卡片（非大表格），符合视觉规范的高密度气质
+- 术语：Agent, Framework, HeadVersion, LiveVersion, DraftStatus, Workspace, Creator, DeploymentMode
+- 组件：Table、KPI、Input.Search、Select(创建人/Live 状态/排序)、Empty、Popconfirm
+- 现有功能：作用域为当前空间(见 Spec K)；Live/运行态/部署方式见 Spec I；版本关系见 Spec F
+- 设计决策：列表页只回答“谁负责、线上是否可用、发布方式是什么、草稿与线上是否一致、是否有异常”；配置细节（模型、参数、工具/技能）放进工作台
 
 #### 待确认 / 假设
 - 假设：默认排序为「最近编辑」倒序
@@ -40,43 +42,45 @@ description: Agent 的列表、详情、创建、编辑、复制、删除等全�
 
 ---
 
-### Requirement: Agent 详情 ✅已确认
-**User Story:** 作为项目成员，我希望查看一个 Agent 的完整配置，并能快速切换查看历史版本，以便了解它当前及过往长什么样。
+### Requirement: Agent 工作台 / 详情 ✅已确认
+**User Story:** 作为项目成员，我希望进入单个 Agent 的工作台，在同一处完成查看、编辑、试跑、发布、版本与回滚，以便遵循「创建 → 调试 → 发布 → 更新」的完整动线。
 
 #### Acceptance Criteria
-1. WHEN 用户进入详情页 THEN 系统 SHALL 展示该 Agent 的基本信息、框架、模型、已选工具/技能、配置预览（只读）
-2. WHERE 详情页顶部 系统 SHALL 提供版本下拉选择器，默认选中最新版本(vN)
-3. WHEN 用户在版本选择器中切换到某历史版本 THEN 系统 SHALL 以**只读**展示该版本的配置内容
-4. WHEN 用户在详情页 THEN 系统 SHALL 提供入口跳转至：编辑、版本历史页（承载对比/回滚等管理动作，见 Spec F）
-5. IF 用户无该 Agent 权限 THEN 系统 SHALL 阻止进入并提示无权限
+1. WHEN 用户在列表点击「管理」 THEN 系统 SHALL 进入该 Agent 的工作台，而非再展示一个与编辑页分离的详情页
+2. WHERE 工作台顶部 系统 SHALL 展示返回、名称、框架、当前 Head 版本、版本与回滚入口，以及主操作「保存为新版本」
+3. WHERE 工作台左侧 系统 SHALL 展示并允许编辑描述、框架（仅创建时可改）、模型、参数、指令文件、工具与技能绑定
+4. WHERE 工作台右侧 系统 SHALL 常驻展示「线上发布与运行」与「试跑」两块；线上发布与运行必须区分 Head、Live、Runtime 三个概念
+5. WHERE Agent 已有多个版本 系统 SHALL 提供「版本与回滚」入口，可查看历史版本、对比版本、直接发布某历史版本或载入历史配置生成新版本（见 Spec F）
+6. IF 用户无该 Agent 权限 THEN 系统 SHALL 阻止进入并提示无权限
 
 #### 引用 / 影响
-- 术语：Agent, Version, ConfigPreview, Tool, Skill
-- 组件：Descriptions、Select(版本切换)、Collapse、Monaco(只读)、Tag
+- 术语：Agent, Version, HeadVersion, LiveVersion, Service, ConfigPreview, Tool, Skill
+- 组件：AgentWorkbench、Tabs、Monospace Editor、Drawer、Segmented、VersionHistory Drawer
 - 现有功能：与版本管理(F)、配置预览(G)联动
-- 设计决策：详情页负责"轻查看"（下拉切换只读看版本）；版本历史页负责"重操作"（对比/回滚）
+- 设计决策：详情、编辑、发布与回滚收敛到同一个 Agent 工作台，避免“点行”和“进入控制台”等重复入口
 
 ---
 
 ### Requirement: 创建 Agent ✅已确认
-> 交互更新：从「分步表单」改为**双栏 Builder**（单页，不分步）。左栏为配置区（框架/基本信息/模型/配置文件/工具技能），右栏为可收起面板（调试 + 配置预览，默认收起）。顶栏含返回、内联名称/描述、框架切换、模型选择、参数、调试/预览开关、保存。
+> 交互更新：从「分步表单」改为**双栏 Builder**（单页，不分步）。左栏为配置区（基本信息/框架/模型/参数/配置文件/工具技能），右栏为线上发布与运行、试跑。创建只负责生成 v1，不自动发布。
 
 **User Story:** 作为项目成员，我希望在一个双栏 Builder 中创建新的 Agent，并根据框架类型配置差异化的配置文件、随手调试，以便高效定义 Agent 的行为和能力。
 
 #### Acceptance Criteria
 1. WHEN 用户点击"创建 Agent"按钮 THEN 系统 SHALL 导航至 Agent 创建页面
-2. WHEN 用户进入创建页面 THEN 系统 SHALL 展示框架选择区，包含 Claude Code(可选)、OpenClaw(可选)、Custom(禁用,标注"coming soon")、Hermes(禁用) 四个框架卡片
+2. WHEN 用户进入创建页面 THEN 系统 SHALL 在工作台元信息区展示紧凑框架选择控件，包含 Claude Code(可选)、OpenClaw(可选)、Custom(禁用,标注"coming soon")、Hermes(禁用)
 3. WHERE 任意可选框架 系统 SHALL 均展示模型选择区（所有框架都需选择模型，见 Spec C）
-4. WHERE 用户选择 Claude Code 系统 SHALL 展示：基本信息(名称必填,中英文均可,2-50字符;描述选填)、模型选择、配置编辑器(claude.md,等宽字体,默认模板预填)、工具选择(抽屉)、技能选择(抽屉)、配置预览(折叠面板,只读 Monaco)
-5. WHERE 用户选择 OpenClaw 系统 SHALL 展示：基本信息(同上)、模型选择、user.md / agent.md / role.md 三个独立配置编辑器(均默认模板预填)、工具选择(同上)、技能选择(同上)、配置预览(同上)
-6. WHEN 用户填写完所有必填项并点击保存 THEN 系统 SHALL 创建 Agent 及其初始版本(v1)，并导航回 Agent 列表
+4. WHERE 用户选择 Claude Code 系统 SHALL 展示：基本信息(名称必填,中英文均可,2-50字符;描述选填)、模型选择、配置编辑器(claude.md,等宽字体,默认模板预填)、工具选择(抽屉)、技能选择(抽屉)、配置预览入口（次级工具，见 Spec G）
+5. WHERE 用户选择 OpenClaw 系统 SHALL 展示：基本信息(同上)、模型选择、user.md / agent.md / role.md 三个独立配置编辑器(均默认模板预填)、工具选择(同上)、技能选择(同上)、配置预览入口（同上）
+6. WHEN 用户填写完所有必填项并点击「创建 Agent」 THEN 系统 SHALL 创建 Agent 及其初始版本(v1)，并停留在该 Agent 工作台
+6a. WHERE 刚创建的 Agent 系统 SHALL 处于「未发布 / 无 Live 版本」状态；用户可先试跑当前配置，再选择是否发布
 7. WHILE Agent 名称已创建 系统 SHALL 禁止修改该 Agent 的名称
 8. IF 名称为空或不符合 2-50 字符规则 THEN 系统 SHALL 阻止保存并行内提示
 9. IF 名称已存在 THEN 系统 SHALL 阻止保存并提示重名
 
 #### 引用 / 影响
 - 术语：Agent, Framework, ConfigFile, Version, Tool, Skill, ConfigPreview
-- 组件：Steps、Form、Card(FrameworkCard)、Select(模型)、Monaco、Drawer、Collapse
+- 组件：AgentWorkbench、Segmented(框架)、Select(模型)、Monospace Editor、Drawer
 - 现有功能：与框架(B)、模型(C)、工具(D)、技能(E)、预览(G)联动
 - 设计决策：所有框架均含模型选择；配置编辑器默认预填框架模板（见 Spec B）
 
@@ -86,19 +90,20 @@ description: Agent 的列表、详情、创建、编辑、复制、删除等全�
 ---
 
 ### Requirement: 编辑 Agent ✅已确认
-> 交互：复用创建用的**双栏 Builder**；名称只读；右栏「调试」喂当前未保存配置，便于改完即试。
+> 交互：复用创建用的**双栏 Builder**；名称只读；右栏「试跑」可在当前配置与线上服务之间切换。
 
 **User Story:** 作为项目成员，我希望在双栏 Builder 中基于某个版本修改配置、随手调试并保存为新版本，以便调优 Agent 的行为表现。
 
 #### Acceptance Criteria
 1. WHEN 用户点击「编辑」进入编辑页 THEN 系统 SHALL 以工作副本预填配置，默认取自最新版本(vN)，名称字段 SHALL 显示为只读
 2. WHERE 用户从某历史版本进入编辑 系统 SHALL 以该历史版本配置作为工作副本（此即回滚路径，见 Spec F）
-3. WHEN 用户修改配置并保存 THEN 系统 SHALL 创建新版本(版本号 +1)并设为当前版本，历史版本保持只读不变
+3. WHEN 用户修改配置并点击「保存为新版本」 THEN 系统 SHALL 创建新版本(版本号 +1)并设为 Head，历史版本保持只读不变
 4. IF 工作副本相对来源版本无任何变更 THEN 系统 SHALL 禁用保存按钮，不生成新版本
-5. WHEN 用户在有未保存修改时离开编辑页 THEN 系统 SHALL 二次确认
+5. WHILE 工作副本存在未保存修改 系统 SHALL 禁止直接发布，并提示「先保存为新版本，再选择是否发布」
+6. WHEN 用户在有未保存修改时离开编辑页 THEN 系统 SHALL 二次确认
 
 #### 引用 / 影响
-- 术语：Agent, Version, ConfigFile
+- 术语：Agent, Version, HeadVersion, ConfigFile
 - 组件：同创建页（复用）、Modal(离开确认)
 - 现有功能：与版本管理(F)联动
 - 设计决策（版本模型）：编辑始终基于某版本的工作副本→保存生成 N+1→历史只读；无变更不生成版本
@@ -107,6 +112,7 @@ description: Agent 的列表、详情、创建、编辑、复制、删除等全�
 
 ### Requirement: 保存草稿 ⬜后续（本期不做，后续版本再实现）
 > 决策：草稿与版本两条线虽清晰，但本期为聚焦核心流程暂不做；demo 已移除相关 UI。下方需求保留为后续设计依据。
+> 注意：本需求里的“保存草稿”是未提交工作副本的持久化；它不同于 Agent Operations 列表里的 **Draft 状态**（Head 与 Live 的关系）。
 
 **User Story:** 作为项目成员，我希望在创建/编辑 Agent 过程中保存草稿，以便未完成时先存着、之后接着改，而不立即生成版本。
 

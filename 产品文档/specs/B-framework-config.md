@@ -1,7 +1,7 @@
 ---
 name: 框架配置
-last amended: 2026-06-24
-version: 2
+last amended: 2026-06-28
+version: 3
 description: 多框架支持、框架差异化配置文件编辑、配置模板
 ---
 
@@ -29,18 +29,18 @@ description: 多框架支持、框架差异化配置文件编辑、配置模板
 **User Story:** 作为项目成员，我希望在创建 Agent 时选择底层框架，以便系统据此展示差异化的配置项。
 
 #### Acceptance Criteria
-1. WHEN 用户进入创建页面 THEN 系统 SHALL 展示四个框架卡片：Claude Code(可选)、OpenClaw(可选)、Custom(禁用,标注"coming soon")、Hermes(禁用)
+1. WHEN 用户进入创建页面 THEN 系统 SHALL 在 Agent 工作台中展示紧凑框架选择控件：Claude Code(可选)、OpenClaw(可选)、Custom(禁用,标注"coming soon")、Hermes(禁用)
 2. WHEN 用户选择某个可选框架 THEN 系统 SHALL 据该框架渲染对应的配置区域
-3. WHILE 框架为禁用态 系统 SHALL 置灰该卡片且不可选择
+3. WHILE 框架为禁用态 系统 SHALL 置灰该选项且不可选择
 4. WHILE Agent 已创建 系统 SHALL 禁止变更其框架
 
 #### 引用 / 影响
 - 术语：Framework（枚举：CLAUDE_CODE / OPENCLAW / CUSTOM / HERMES）
-- 组件：Card(FrameworkCard)、Tag
+- 组件：Segmented/紧凑选择控件、Tooltip
 - 现有功能：与创建 Agent(A)联动
 
 #### 设计决策
-- Custom 与 Hermes 均作为**未开放的 Agent 框架占位**：卡片置灰禁用、不可选择，Custom 标注 "coming soon"。未来开放后的配置形态另行设计。
+- Custom 与 Hermes 均作为**未开放的 Agent 框架占位**：选项置灰禁用、不可选择，Custom 标注 "coming soon"。未来开放后的配置形态另行设计。
 
 ---
 

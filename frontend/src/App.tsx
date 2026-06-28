@@ -15,6 +15,7 @@ const { Text } = Typography;
 import { ACCENT, FRAMEWORKS, PROVIDERS, MODEL_PARAMS, TOOLS, SKILLS, TEMPLATES, fwName, ISOLATIONS, isoName, INIT_WORKSPACES, td, now, mkAgent, INIT_AGENTS } from "./config";
 import { apiCall, API_ON, setApiOn } from "./api";
 import { AgentBuilder, AgentDetail, AgentWorkbench, VersionDiff, MembersPanel, ChatPanel, Playground, SkillMarket, McpMarket, DeployPanel, EnvPanel, SessionConsole, pill, antMsg, setAntMsg } from "./components";
+import "./agent-redesign.css";
 
 let AGENT_SEQ = 100;
 function Root() {
@@ -27,6 +28,8 @@ function Root() {
   const [view, setView] = useState({ name: 'list' });
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState('updated');
+  const [ownerFilter, setOwnerFilter] = useState('all');
+  const [runtimeFilter, setRuntimeFilter] = useState('all');
   const [createWsOpen, setCreateWsOpen] = useState(false);
   const [newWsName, setNewWsName] = useState('');
   const [apiMode, setApiMode] = useState(false);
@@ -53,14 +56,54 @@ function Root() {
   const ws = workspaces.find(w => w.id === curWs);
   const myRole = (ws.members.find(m => m.id === 'u0') || {}).role || 'member';
   const isPlatformAdmin = true; // demo：当前 mock 用户为平台管理员；生产由 SSO/RBAC 决定
+  const ownerName = id => {
+    if (!id) return '未记录';
+    const m = (ws.members || []).find(x => x.id === id || x.name === id);
+    return (m && m.name) || id;
+  };
+
+  const runtimeMeta = a => {
+    const s = svcMap[a.id];
+    const liveIso = (s && s.isolation) || a.publishedIsolation || 'L1';
+    const liveVersion = (s && s.version) || a.publishedVersion || '-';
+    const publishForm = `${isoName(liveIso)}(${liveIso})`;
+    const location = s ? (s.location === 'cloud' ? '云端' : '本地') : '';
+    if (!a.published) return { key: 'unpublished', label: '未发布', color: '#94A3B8', bg: '#F1F5F9', meta: '无 Live 版本' };
+    if (!s) return { key: 'stopped', label: '已发布 · 停止', color: '#64748B', bg: '#F1F5F9', meta: `${publishForm} · Live v${liveVersion}` };
+    if (s.status === 'deploying') return { key: 'deploying', label: '部署中', color: '#D97706', bg: '#FEF3C7', meta: `${location} · ${publishForm} · Live v${liveVersion}` };
+    if (s.status === 'failed') return { key: 'failed', label: '失败', color: '#DC2626', bg: '#FEE2E2', meta: `${s.error || '部署失败'} · ${publishForm}` };
+    return { key: 'running', label: '运行中', color: '#16A34A', bg: '#DCFCE7', meta: `${location} · ${publishForm} · Live v${liveVersion}` };
+  };
+  const draftMeta = a => {
+    if (!a.published) return { key: 'draft_only', label: '仅草稿', cls: 'draft-state--draft', meta: `Head v${a.version || '-'}` };
+    if (a.publishedVersion !== a.version) return { key: 'diverged', label: '与 Live 不同', cls: 'draft-state--diverged', meta: `Head v${a.version} / Live v${a.publishedVersion}` };
+    return { key: 'synced', label: '与 Live 一致', cls: 'draft-state--ok', meta: `Head v${a.version}` };
+  };
+  const ownerOptions = useMemo(() => {
+    const ids = Array.from(new Set(agents.filter(a => a.wsId === curWs && !a.deleted).map(a => a.creator).filter(Boolean)));
+    return [{ value: 'all', label: '全部创建人' }, ...ids.map(id => ({ value: id, label: ownerName(id) }))];
+  }, [agents, curWs, ws]);
 
   const visibleAgents = useMemo(() => {
     let list = agents.filter(a => a.wsId === curWs && !a.deleted);
     if (search) list = list.filter(a => a.name.toLowerCase().includes(search.toLowerCase()));
+    if (ownerFilter !== 'all') list = list.filter(a => a.creator === ownerFilter);
+    if (runtimeFilter === 'draft_diff') list = list.filter(a => draftMeta(a).key === 'diverged');
+    else if (runtimeFilter !== 'all') list = list.filter(a => runtimeMeta(a).key === runtimeFilter);
     return list.slice().sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name) : b.updatedAt.localeCompare(a.updatedAt));
-  }, [agents, curWs, search, sort]);
+  }, [agents, curWs, search, sort, ownerFilter, runtimeFilter, services]);
 
-  const switchWs = id => { setCurWs(id); setView({ name: 'list' }); setNav('agent'); setSearch(''); if (API_ON) loadAgents(id); };
+  const agentStats = useMemo(() => {
+    const list = agents.filter(a => a.wsId === curWs && !a.deleted);
+    const published = list.filter(a => a.published).length;
+    const running = list.filter(a => runtimeMeta(a).key === 'running').length;
+    const deploying = list.filter(a => runtimeMeta(a).key === 'deploying').length;
+    const failed = list.filter(a => runtimeMeta(a).key === 'failed').length;
+    const draftOnly = list.filter(a => draftMeta(a).key === 'draft_only').length;
+    return { total: list.length, published, running, deploying, failed, draftOnly, issues: deploying + failed };
+  }, [agents, curWs, services]);
+
+  const switchWs = id => { setCurWs(id); setView({ name: 'list' }); setNav('agent'); setSearch(''); setOwnerFilter('all'); setRuntimeFilter('all'); if (API_ON) loadAgents(id); };
   // stay=true：创建后停留在 Builder（用于「创建并发布」），返回新建 agent；否则回列表
   const saveNew = (data, stay) => {
     if (API_ON) {
@@ -69,7 +112,7 @@ function Root() {
         .catch(e => { message.error('创建失败：' + e.message); return null; });
     }
     const id = 'a' + (++AGENT_SEQ); const ts = now();
-    const a = { id, wsId: curWs, version: 1, updatedAt: ts, deleted: false, ...data, versions: [{ version: 1, createdAt: ts, config: { ...data } }] };
+    const a = { id, wsId: curWs, version: 1, updatedAt: ts, deleted: false, creator: 'u0', ...data, versions: [{ version: 1, createdAt: ts, config: { ...data } }] };
     setAgents([a, ...agents]); message.success(`已创建「${data.name}」及初始版本 v1`); if (!stay) setView({ name: 'list' });
     return Promise.resolve(a);
   };
@@ -95,36 +138,52 @@ function Root() {
     const id = 'w' + Date.now(); setWorkspaces([...workspaces, { id, name: newWsName.trim(), members: [{ id: 'u0', name: 'Helena（我）', role: 'owner' }] }]); setCurWs(id); setCreateWsOpen(false); setNewWsName(''); message.success('项目空间已创建');
   };
 
-  const statusDot = (color, label, title) => <span title={title || label} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#33333C', whiteSpace: 'nowrap' }}><span style={{ width: 7, height: 7, borderRadius: 4, background: color, flexShrink: 0 }} />{label}</span>;
-  const renderStatus = a => {
-    if (!a.published) return statusDot('#C9CAD6', '未发布');
-    const s = svcMap[a.id];
-    if (!s) return statusDot('#C9CAD6', '已停止');
-    if (s.status === 'deploying') return statusDot('#E8A33D', '部署中', s.error);
-    if (s.status === 'failed') return statusDot('#E5484D', '失败', s.error);
-    return statusDot('#30A46C', '运行中' + (s.location === 'cloud' ? ' · 云' : ''));
+  const renderRuntime = a => {
+    const m = runtimeMeta(a);
+    return (
+      <div>
+        <span className="runtime-state" title={m.meta}>
+          <span className="runtime-dot" style={{ '--runtime-color': m.color, '--runtime-bg': m.bg } as React.CSSProperties} />
+          {m.label}
+        </span>
+        <div className="runtime-meta">{m.meta}</div>
+      </div>
+    );
+  };
+  const renderDraft = a => {
+    const m = draftMeta(a);
+    return (
+      <div>
+        <span className={'draft-state ' + m.cls}>{m.label}</span>
+        <div className="draft-state__meta">{m.meta}</div>
+      </div>
+    );
+  };
+  const renderOwner = a => {
+    const name = ownerName(a.creator);
+    return (
+      <div className="owner-cell">
+        <Avatar size={22} className="owner-avatar">{name.slice(0, 1)}</Avatar>
+        <span className="owner-name">{name}</span>
+      </div>
+    );
   };
   const columns = [
-    { title: '名称', dataIndex: 'name', ellipsis: true, render: (t, r) => (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-        <div style={{ width: 28, height: 28, borderRadius: 6, background: '#EEF0FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><RobotOutlined style={{ color: ACCENT, fontSize: 15 }} /></div>
+    { title: 'Agent', dataIndex: 'name', ellipsis: true, render: (t, r) => (
+      <div className="agent-name-cell">
+        <div className="agent-avatar"><RobotOutlined style={{ fontSize: 15 }} /></div>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: 13.5, color: '#17171C', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t}</div>
-          <div style={{ color: '#9A9CA8', fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.desc || '暂无描述'}</div>
+          <div className="agent-name-main">{t}</div>
+          <div className="agent-name-sub">{r.desc || '暂无描述'}</div>
+          <div className="agent-name-sub"><span className="compact-code">{r.id}</span> · {fwName(r.framework)} · 更新 {(r.updatedAt || '').slice(5)}</div>
         </div>
       </div>) },
-    { title: '状态', width: 116, render: (_, r) => renderStatus(r) },
-    { title: '框架', width: 116, dataIndex: 'framework', render: f => <span style={pill('#EEF0FF', '#4F46E5')}>{fwName(f)}</span> },
-    { title: '模型', width: 164, dataIndex: 'model', render: m => <span style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 12, color: '#5A5C6B' }}>{m}</span> },
-    { title: '版本', width: 104, render: (_, r) => (
-      <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-        <span style={pill('#F1F1F4', '#5A5C6B')}>v{r.version}</span>
-        {r.published && r.publishedVersion !== r.version && <span style={pill('#E9F7EF', '#1E8449')} title={`已发布 v${r.publishedVersion}`}>线上 v{r.publishedVersion}</span>}
-      </span>) },
-    { title: '更新', width: 120, dataIndex: 'updatedAt', render: t => <span style={{ color: '#9A9CA8', fontSize: 12.5 }}>{t.slice(5)}</span> },
-    { title: '', width: 72, render: (_, r) => (
-      <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 2 }}>
-        <Tooltip title="编辑"><Button size="small" type="text" icon={<EditOutlined />} onClick={() => setView({ name: 'edit', agent: r })} /></Tooltip>
+    { title: 'Owner', width: 140, render: (_, r) => renderOwner(r) },
+    { title: 'Live', width: 162, render: (_, r) => renderRuntime(r) },
+    { title: 'Draft', width: 126, render: (_, r) => renderDraft(r) },
+    { title: '', width: 82, fixed: 'right', render: (_, r) => (
+      <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+        <Button size="small" type="link" onClick={() => openAgent(r)} style={{ paddingInline: 6 }}>管理</Button>
         <Popconfirm title="删除该 Agent？" description="软删除，记录保留" onConfirm={() => softDelete(r.id)}>
           <Tooltip title="删除"><Button size="small" type="text" danger icon={<DeleteOutlined />} /></Tooltip>
         </Popconfirm>
@@ -147,9 +206,9 @@ function Root() {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider width={236} theme="light" style={{ background: '#FAFAFB', borderRight: '1px solid #EBEBF1', padding: '16px 14px', display: 'flex', flexDirection: 'column', position: 'fixed', height: '100vh', left: 0, top: 0 }}>
+      <Sider className="ais-sider" width={236} theme="light" style={{ background: '#FAFAFB', borderRight: '1px solid #EBEBF1', padding: '16px 14px', display: 'flex', flexDirection: 'column', position: 'fixed', height: '100vh', left: 0, top: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 6px 16px' }}>
-          <div style={{ width: 30, height: 30, borderRadius: 8, background: 'linear-gradient(135deg,#4F46E5,#7A72ED)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 16, boxShadow: '0 2px 7px rgba(79,70,229,0.30)' }}>A</div>
+          <div className="ais-logo-mark" style={{ width: 30, height: 30, borderRadius: 8, background: 'linear-gradient(135deg,#4F46E5,#7A72ED)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 16, boxShadow: '0 2px 7px rgba(79,70,229,0.30)' }}>A</div>
           <span style={{ fontWeight: 750, fontSize: 16, letterSpacing: -0.2, color: '#17171C' }}>AISpace</span>
         </div>
 
@@ -190,8 +249,8 @@ function Root() {
         </div>
       </Sider>
 
-      <Layout style={{ marginLeft: 236, background: '#fff' }}>
-        <div style={{ height: 56, borderBottom: '1px solid #EFEFF2', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px', position: 'sticky', top: 0, background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', zIndex: 20 }}>
+      <Layout style={{ marginLeft: 236, background: '#f6f7f9' }}>
+        <div className="ais-topbar" style={{ height: 56, borderBottom: '1px solid #EFEFF2', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px', position: 'sticky', top: 0, background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', zIndex: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 13.5 }}>
             <AppstoreOutlined style={{ color: '#A6A8B4', fontSize: 14 }} />
             <span style={{ color: '#8A8C99' }}>{ws.name}</span>
@@ -207,26 +266,49 @@ function Root() {
           </Dropdown>
         </div>
 
-        <Content style={{ padding: inBuilder ? '18px 28px' : '20px 28px 36px', maxWidth: inBuilder ? 'none' : 1240, width: '100%', margin: inBuilder ? 0 : '0 auto', height: inBuilder ? 'calc(100vh - 56px)' : 'auto' }}>
+        <Content className="ais-content" style={{ padding: inBuilder ? '14px 18px' : '18px 24px 32px', maxWidth: inBuilder ? 'none' : 1480, width: '100%', margin: inBuilder ? 0 : '0 auto', height: inBuilder ? 'calc(100vh - 48px)' : 'auto' }}>
           {nav === 'agent' && view.name === 'list' && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 16 }}>
+            <div className="agent-console">
+              <div className="agent-console__header">
                 <div>
-                  <div style={{ fontSize: 20, fontWeight: 750, letterSpacing: -0.3, color: '#17171C' }}>Agent</div>
-                  <Text style={{ color: '#8A8C99', fontSize: 13.5 }}>管理、调试与版本化你的智能体</Text>
+                  <div className="agent-console__eyebrow">{ws.name} · Agent Registry</div>
+                  <div className="agent-console__title">Agent Operations</div>
+                  <div className="agent-console__subtitle">围绕负责人、Live 版本、发布方式和草稿状态做运营判断。</div>
                 </div>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setView({ name: 'create' })}>创建 Agent</Button>
+                <Space size={8}>
+                  <Button icon={<ReloadOutlined />} onClick={() => { if (API_ON) { loadAgents(curWs); loadServices(); message.success('已刷新'); } }}>刷新</Button>
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => setView({ name: 'create' })}>创建 Agent</Button>
+                </Space>
               </div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
-                <Input allowClear prefix={<SearchOutlined style={{ color: '#B6B6BE' }} />} placeholder="搜索 Agent 名称" value={search} onChange={e => setSearch(e.target.value)} style={{ width: 260 }} />
-                <Select value={sort} style={{ width: 136 }} onChange={setSort} options={[{ value: 'updated', label: '最近编辑' }, { value: 'name', label: '名称 A–Z' }]} />
+
+              <div className="agent-kpi-grid">
+                <div className="agent-kpi"><div className="agent-kpi__label">ALL AGENTS</div><div className="agent-kpi__value">{agentStats.total}</div><div className="agent-kpi__meta">{agentStats.draftOnly} 个仅草稿</div></div>
+                <div className="agent-kpi"><div className="agent-kpi__label">PUBLISHED LIVE</div><div className="agent-kpi__value">{agentStats.published}</div><div className="agent-kpi__meta">已有线上版本</div></div>
+                <div className="agent-kpi"><div className="agent-kpi__label">RUNNING LIVE</div><div className="agent-kpi__value">{agentStats.running}</div><div className="agent-kpi__meta">当前可被调用</div></div>
+                <div className="agent-kpi"><div className="agent-kpi__label">ATTENTION</div><div className="agent-kpi__value">{agentStats.issues}</div><div className="agent-kpi__meta">部署中 {agentStats.deploying} · 失败 {agentStats.failed}</div></div>
+              </div>
+
+              <div className="agent-toolbar">
+                <Input allowClear size="small" prefix={<SearchOutlined style={{ color: '#94A3B8' }} />} placeholder="按名称或描述搜索" value={search} onChange={e => setSearch(e.target.value)} style={{ width: 220 }} />
+                <Select size="small" value={ownerFilter} style={{ width: 120 }} onChange={setOwnerFilter} options={ownerOptions} />
+                <Select size="small" value={runtimeFilter} style={{ width: 144 }} onChange={setRuntimeFilter}
+                  options={[
+                    { value: 'all', label: '全部 Live 状态' },
+                    { value: 'running', label: '运行中' },
+                    { value: 'deploying', label: '部署中' },
+                    { value: 'failed', label: '失败' },
+                    { value: 'stopped', label: '已停止' },
+                    { value: 'unpublished', label: '未发布' },
+                    { value: 'draft_diff', label: 'Draft 与 Live 不同' },
+                  ]} />
+                <Select size="small" value={sort} style={{ width: 112 }} onChange={setSort} options={[{ value: 'updated', label: '最近编辑' }, { value: 'name', label: '名称 A-Z' }]} />
                 <div style={{ flex: 1 }} />
-                <Text style={{ color: '#A6A8B4', fontSize: 12.5 }}>共 {visibleAgents.length} 个</Text>
+                <Text style={{ color: '#64748B', fontSize: 12 }}>显示 {visibleAgents.length} / {agentStats.total}</Text>
               </div>
-              <div style={{ border: '1px solid #EBEBF1', borderRadius: 8, overflow: 'hidden' }}>
-                <Table rowKey="id" columns={columns} dataSource={visibleAgents} pagination={false} size="middle"
-                  onRow={r => ({ onClick: () => openAgent(r), style: { cursor: 'pointer' } })}
-                  locale={{ emptyText: <div style={{ padding: '36px 0' }}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={search ? '没有匹配的 Agent' : '该空间还没有 Agent'}>{!search && <Button type="primary" icon={<PlusOutlined />} onClick={() => setView({ name: 'create' })}>创建 Agent</Button>}</Empty></div> }} />
+
+              <div className="agent-table-shell">
+                <Table rowKey="id" columns={columns} dataSource={visibleAgents} pagination={false} size="small" scroll={{ x: 700 }}
+                  locale={{ emptyText: <div style={{ padding: '36px 0' }}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={search || ownerFilter !== 'all' || runtimeFilter !== 'all' ? '没有匹配的 Agent' : '该空间还没有 Agent'}>{!search && ownerFilter === 'all' && runtimeFilter === 'all' && <Button type="primary" icon={<PlusOutlined />} onClick={() => setView({ name: 'create' })}>创建 Agent</Button>}</Empty></div> }} />
               </div>
             </div>
           )}
@@ -263,16 +345,16 @@ function Root() {
 function App() {
   return React.createElement(ConfigProvider, {
     theme: {
-      token: { colorPrimary: '#17171C', colorLink: ACCENT, colorLinkHover: '#6E66EA', borderRadius: 7, fontSize: 14, controlHeight: 32, colorBorder: '#E7E7EC', colorBorderSecondary: '#F1F1F5', colorText: '#17171C', colorTextSecondary: '#5A5C6B', fontFamily: '-apple-system, "PingFang SC", "Microsoft YaHei", Segoe UI, Inter, sans-serif' },
+      token: { colorPrimary: '#0F172A', colorLink: ACCENT, colorLinkHover: '#1D4ED8', borderRadius: 5, fontSize: 13, controlHeight: 30, colorBorder: '#DDE3EA', colorBorderSecondary: '#EAEFF5', colorText: '#111827', colorTextSecondary: '#475569', fontFamily: 'Inter, -apple-system, "PingFang SC", "Microsoft YaHei", Segoe UI, sans-serif' },
       components: {
-        Layout: { bodyBg: '#fff' },
-        Menu: { itemBg: 'transparent', itemSelectedBg: '#EEF0FF', itemSelectedColor: ACCENT, itemHeight: 38, itemBorderRadius: 8, itemColor: '#5B5D6B', itemHoverBg: '#F4F4F7', iconSize: 16 },
-        Table: { headerBg: '#FAFAFB', headerColor: '#8A8C99', headerSplitColor: 'transparent', borderColor: '#F1F1F5', rowHoverBg: '#F7F8FB', cellPaddingBlock: 8, cellPaddingInline: 14, fontSize: 13.5 },
-        Button: { primaryShadow: 'none', defaultShadow: 'none', fontWeight: 500, controlHeight: 32, paddingInline: 15 },
-        Input: { activeShadow: '0 0 0 3px rgba(79,70,229,0.10)' },
-        Segmented: { itemSelectedBg: '#fff', trackBg: '#F1F1F4', itemSelectedColor: '#17171C', itemColor: '#5B5D6B' },
-        Tabs: { inkBarColor: ACCENT, itemSelectedColor: ACCENT, itemColor: '#8A8C99' },
-        Card: { borderRadiusLG: 8 },
+        Layout: { bodyBg: '#F6F7F9' },
+        Menu: { itemBg: 'transparent', itemSelectedBg: '#E8EEF7', itemSelectedColor: '#0F172A', itemHeight: 34, itemBorderRadius: 5, itemColor: '#475569', itemHoverBg: '#EFF3F8', iconSize: 15 },
+        Table: { headerBg: '#F8FAFC', headerColor: '#64748B', headerSplitColor: 'transparent', borderColor: '#E2E8F0', rowHoverBg: '#F8FAFC', cellPaddingBlock: 7, cellPaddingInline: 12, fontSize: 12.5 },
+        Button: { primaryShadow: 'none', defaultShadow: 'none', fontWeight: 600, controlHeight: 30, paddingInline: 12 },
+        Input: { activeShadow: '0 0 0 2px rgba(37,99,235,0.12)' },
+        Segmented: { itemSelectedBg: '#fff', trackBg: '#EAEFF5', itemSelectedColor: '#0F172A', itemColor: '#475569' },
+        Tabs: { inkBarColor: ACCENT, itemSelectedColor: '#0F172A', itemColor: '#64748B' },
+        Card: { borderRadiusLG: 6 },
       },
     },
   }, React.createElement(AntApp, null, React.createElement(Root)));

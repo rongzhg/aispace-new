@@ -56,16 +56,16 @@ export function PublishChooser({ open, agentName, versions, defaultVersion, defa
   const hasVers = versions && versions.length > 1;
   const latestVer = hasVers ? Math.max(...versions.map(z => z.version)) : defaultVersion;
   return (
-    <Modal title={`发布${agentName ? '「' + agentName + '」' : ''}`} open={open} onCancel={onCancel}
+    <Modal title={`发布 Live 版本${agentName ? ' · ' + agentName : ''}`} open={open} onCancel={onCancel}
       okText={migrating ? '迁移并发布' : '发布'} onOk={() => onConfirm(iso, ver)} width={520} destroyOnHidden>
       {hasVers && (
         <div style={{ margin: '4px 0 14px' }}>
-          <div style={{ fontSize: 13, color: '#5A5C6B', marginBottom: 6 }}>发布版本</div>
+          <div style={{ fontSize: 13, color: '#5A5C6B', marginBottom: 6 }}>Live 指向版本</div>
           <Select value={ver} style={{ width: '100%' }} onChange={setVer}
             options={versions.slice().reverse().map(x => ({ value: x.version, label: `v${x.version}${x.version === latestVer ? ' · 最新' : ''} · ${(x.createdAt || '').slice(5)}` }))} />
         </div>
       )}
-      <div style={{ fontSize: 13, color: '#5A5C6B', margin: '4px 0 12px' }}>选择运行环境（决定隔离强度——成本与互相影响范围）{curIso ? <>；当前 <span style={pill('#F1F1F4', '#5A5C6B')}>{isoName(curIso)} · {curIso}</span></> : ''}：</div>
+      <div style={{ fontSize: 13, color: '#5A5C6B', margin: '4px 0 12px' }}>选择运行环境（发布后会启动或替换该 Live 版本的服务实例）{curIso ? <>；当前 <span style={pill('#F1F1F4', '#5A5C6B')}>{isoName(curIso)} · {curIso}</span></> : ''}：</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {ISOLATIONS.map(o => {
           const on = iso === o.key;
@@ -737,11 +737,11 @@ export function AgentWorkbench({ mode, agent: agentProp, service, wsId, onBack, 
   const testCfg = { ...cfg, id: savedAgent && savedAgent.id };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <div className="agent-workbench" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* 顶栏：名称 + 状态 ……… 版本 + 保存 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 12, borderBottom: '1px solid #F1F1F5', marginBottom: 12 }}>
+      <div className="agent-workbench-top" style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 12, borderBottom: '1px solid #F1F1F5', marginBottom: 12 }}>
         <Button type="text" icon={<ArrowLeftOutlined />} onClick={onBack} />
-        <Input variant="borderless" value={name} disabled={!isCreate} maxLength={50} placeholder="未命名 Agent"
+        <Input className="agent-workbench-title" variant="borderless" value={name} disabled={!isCreate} maxLength={50} placeholder="未命名 Agent"
           onChange={e => setName(e.target.value)} style={{ fontSize: 18, fontWeight: 750, padding: 0, width: 240, color: '#17171C', flexShrink: 0 }} />
         <span style={pill('#EEF0FF', '#4F46E5')}>{fwName(framework)}</span>
         {!isCreate && statusPill}
@@ -750,22 +750,20 @@ export function AgentWorkbench({ mode, agent: agentProp, service, wsId, onBack, 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {!isCreate && (
             <>
-              <span style={pill('#F1F1F4', '#5A5C6B')}>v{savedAgent.version}</span>
-              <Button size="small" icon={<BranchesOutlined />} onClick={() => setHistOpen(true)}>版本历史{versions.length > 1 ? ` · ${versions.length}` : ''}</Button>
+              <span style={pill('#F1F1F4', '#5A5C6B')}>Head v{savedAgent.version}</span>
+              <Button size="small" icon={<BranchesOutlined />} onClick={() => setHistOpen(true)}>版本与回滚{versions.length > 1 ? ` · ${versions.length}` : ''}</Button>
             </>
           )}
           {isCreate
-            ? <Dropdown.Button type="primary" disabled={!canSave} icon={<DownOutlined />} onClick={primarySave}
-                menu={{ items: [{ key: 'draft', label: '仅创建草稿（暂不上线）', onClick: createDraft }] }}>创建并发布</Dropdown.Button>
-            : <Dropdown.Button type="primary" disabled={!canSave} icon={<DownOutlined />} onClick={saveVersion}
-                menu={{ items: [{ key: 'pub', label: '保存并发布', onClick: primarySave }] }}>保存为新版本</Dropdown.Button>}
+            ? <Button type="primary" disabled={!canSave} onClick={createDraft}>创建 Agent</Button>
+            : <Button type="primary" disabled={!canSave} onClick={saveVersion}>保存为新版本</Button>}
         </div>
       </div>
 
       {/* 主体：中（配置编辑）+ 右（运行 & 试跑） */}
-      <div style={{ flex: 1, display: 'flex', gap: 14, minHeight: 0 }}>
+      <div className="agent-workbench-body" style={{ flex: 1, display: 'flex', gap: 14, minHeight: 0 }}>
         {/* 中：配置 */}
-        <div style={{ flex: 1, overflow: 'auto', minWidth: 0, paddingRight: 2 }}>
+        <div className="agent-config-scroll" style={{ flex: 1, overflow: 'auto', minWidth: 0, paddingRight: 2 }}>
           {/* 元信息条 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
             <Input variant="borderless" value={desc} placeholder="添加描述…" onChange={e => setDesc(e.target.value)} style={{ fontSize: 13, padding: 0, color: '#8A8C99', width: 260 }} />
@@ -784,9 +782,9 @@ export function AgentWorkbench({ mode, agent: agentProp, service, wsId, onBack, 
             </Popover>
           </div>
 
-          <div style={{ background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, padding: 16, marginBottom: 14 }}>
+          <div className="agent-panel agent-panel--pad" style={{ background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, padding: 16, marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <Text style={{ fontSize: 13, fontWeight: 650, color: '#33333C' }}>指令文件 · {fwName(framework)}</Text>
+              <Text className="agent-section-title" style={{ fontSize: 13, fontWeight: 650, color: '#33333C' }}>指令文件 · {fwName(framework)}</Text>
               <Button size="small" type="text" style={{ color: ACCENT }} onClick={() => setFiles({ ...TEMPLATES[framework] })}>重置为模板</Button>
             </div>
             {fileKeys.length > 1 ? (
@@ -796,10 +794,10 @@ export function AgentWorkbench({ mode, agent: agentProp, service, wsId, onBack, 
             ) : <CodeEditor value={files[fileKeys[0]] || ''} onChange={v => setFiles({ ...files, [fileKeys[0]]: v })} rows={16} />}
           </div>
 
-          <div style={{ background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, padding: 16 }}>
-            <Text style={{ fontSize: 13, fontWeight: 650, color: '#33333C' }}>能力</Text>
-            <div style={{ display: 'flex', gap: 24, marginTop: 12, flexWrap: 'wrap' }}>
-              <div style={{ flex: 1, minWidth: 200 }}>
+          <div className="agent-panel agent-panel--pad" style={{ background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, padding: 16 }}>
+            <Text className="agent-section-title" style={{ fontSize: 13, fontWeight: 650, color: '#33333C' }}>能力绑定</Text>
+            <div className="agent-bindings" style={{ marginTop: 12 }}>
+              <div className="agent-binding-box" style={{ minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <span style={{ color: '#5A5C6B', fontSize: 13 }}><ToolOutlined /> 工具</span>
                   <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => setDrawer('tool')}>添加</Button>
@@ -807,7 +805,7 @@ export function AgentWorkbench({ mode, agent: agentProp, service, wsId, onBack, 
                 <div>{tools.length === 0 ? <Text style={{ color: '#A6A8B4', fontSize: 12 }}>未选择</Text> :
                   tools.map(id => { const t = TOOLS.find(x => x.id === id); return <Tag key={id} closable bordered={false} onClose={() => setTools(tools.filter(x => x !== id))} style={{ marginBottom: 6, background: '#EEF0FF', color: ACCENT }}>{(t && t.name) || id}</Tag>; })}</div>
               </div>
-              <div style={{ flex: 1, minWidth: 200 }}>
+              <div className="agent-binding-box" style={{ minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <span style={{ color: '#5A5C6B', fontSize: 13 }}><BulbOutlined /> 技能</span>
                   <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => setDrawer('skill')}>添加</Button>
@@ -820,24 +818,45 @@ export function AgentWorkbench({ mode, agent: agentProp, service, wsId, onBack, 
         </div>
 
         {/* 右：运行 & 试跑 —— 常驻 */}
-        <div style={{ width: 400, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
-          {/* 运行面板 */}
-          <div style={{ background: '#fff', border: '1px solid #ECECEF', borderRadius: 8, padding: '12px 14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5 }}>
-                <span style={{ fontWeight: 700, fontSize: 13.5 }}>运行</span>
-                {isCreate ? <span style={{ color: '#A6A8B4' }}>创建后可发布</span>
-                  : !published && !service ? <span style={{ color: '#A6A8B4' }}>未发布</span>
-                  : <><span style={pill('#F1F1F4', '#5A5C6B')}>v{liveVer}</span><span style={pill('#F1F1F4', '#5A5C6B')}>{isoName(liveIso)}·{liveIso}</span>{service && (service.location === 'cloud' ? <span style={pill('#EEF0FF', '#4F46E5')}>☁云</span> : <span style={pill('#F1F1F4', '#5A5C6B')}>本地</span>)}</>}
+        <div className="agent-side-panel" style={{ width: 400, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
+          {/* 线上发布与运行面板：版本发布 != 服务实例运行 */}
+          <div className="agent-panel agent-panel--pad" style={{ background: '#fff', border: '1px solid #ECECEF', borderRadius: 8, padding: '12px 14px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5 }}>
+                  <span style={{ fontWeight: 760, fontSize: 13.5, color: '#0f172a' }}>线上发布与运行</span>
+                  {!isCreate && statusPill}
+                </div>
+                <div style={{ marginTop: 6, display: 'grid', gridTemplateColumns: '72px minmax(0,1fr)', rowGap: 4, columnGap: 8, fontSize: 11.5 }}>
+                  <span style={{ color: '#94A3B8' }}>Head</span>
+                  <span style={{ color: '#475569' }}>{isCreate ? '未创建' : `v${savedAgent.version}${dirty ? '（有未保存改动）' : ''}`}</span>
+                  <span style={{ color: '#94A3B8' }}>Live</span>
+                  <span style={{ color: '#475569' }}>{published ? `v${savedAgent.publishedVersion} · ${isoName(liveIso)}(${liveIso})` : '未发布'}</span>
+                  <span style={{ color: '#94A3B8' }}>Runtime</span>
+                  <span style={{ color: '#475569' }}>{isCreate ? '保存后可发布' : running ? `${service.location === 'cloud' ? '云端' : '本地'}服务运行中` : deploying ? '部署中' : failed ? '部署失败' : published ? '服务已停止' : '无实例'}</span>
+                </div>
+                {!isCreate && published && savedAgent.publishedVersion !== savedAgent.version && !dirty && (
+                  <div style={{ marginTop: 6, color: '#B45309', fontSize: 11.5 }}>Head v{savedAgent.version} 尚未发布，线上仍是 v{savedAgent.publishedVersion}。</div>
+                )}
+                {!isCreate && dirty && (
+                  <div style={{ marginTop: 6, color: '#64748B', fontSize: 11.5 }}>先保存为新版本，再选择是否发布。</div>
+                )}
               </div>
-              {!isCreate && <Space size={6}>
-                {!published && !service ? <Button size="small" type="primary" onClick={() => askPublish()}>发布</Button>
+              {!isCreate && <Space size={6} style={{ flexShrink: 0 }}>
+                {dirty ? <Button size="small" disabled>先保存</Button>
+                  : !published && !service ? <Button size="small" type="primary" onClick={() => askPublish(savedAgent.version)}>发布 v{savedAgent.version}</Button>
                   : deploying ? <Button size="small" loading disabled>部署中</Button>
-                  : failed ? <Button size="small" type="primary" onClick={() => askPublish()}>重新发布</Button>
-                  : running ? <><Tooltip title="换版本/环境（本地↔云）"><Button size="small" onClick={() => askPublish()}>更改发布</Button></Tooltip><Popconfirm title="停止该服务？" description="仅停实例，已发布配置保留" onConfirm={stopService}><Button size="small" danger>停服</Button></Popconfirm></>
-                  : <><Tooltip title={`用已发布 v${savedAgent.publishedVersion}·${isoName(liveIso)} 原样拉起`}><Button size="small" type="primary" onClick={startPublished}>启动</Button></Tooltip><Button size="small" onClick={() => askPublish()}>更改发布</Button></>}
+                  : failed ? <Button size="small" type="primary" onClick={() => askPublish(savedAgent.version)}>重新发布</Button>
+                  : running ? <><Tooltip title="选择要发布的版本 / 运行环境，发布后替换当前实例"><Button size="small" onClick={() => askPublish(savedAgent.version)}>重新发布…</Button></Tooltip><Popconfirm title="停止该服务？" description="仅停实例，已发布配置保留" onConfirm={stopService}><Button size="small" danger>停服</Button></Popconfirm></>
+                  : <><Tooltip title={`用已发布 v${savedAgent.publishedVersion} · ${isoName(liveIso)} 原样拉起服务实例`}><Button size="small" type="primary" onClick={startPublished}>启动 Live</Button></Tooltip><Button size="small" onClick={() => askPublish(savedAgent.version)}>发布其他版本…</Button></>}
               </Space>}
             </div>
+            {!isCreate && versions.length > 1 && (
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <span style={{ color: '#64748B', fontSize: 11.5 }}>需要回滚时，从历史版本选择“直接发布此版本”或“回滚为新版本”。</span>
+                <Button size="small" icon={<BranchesOutlined />} onClick={() => setHistOpen(true)}>回滚 / 历史</Button>
+              </div>
+            )}
             {running && (
               <div style={{ marginTop: 10, borderTop: '1px solid #F4F4F7', paddingTop: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -856,7 +875,7 @@ export function AgentWorkbench({ mode, agent: agentProp, service, wsId, onBack, 
             )}
           </div>
           {/* 试跑控制台 */}
-          <div style={{ flex: 1, minHeight: 0, background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, padding: 14, display: 'flex', flexDirection: 'column' }}>
+          <div className="agent-panel agent-panel--pad" style={{ flex: 1, minHeight: 0, background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, padding: 14, display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <Text style={{ fontSize: 13, fontWeight: 650 }}>试跑</Text>
               {running
@@ -1007,7 +1026,7 @@ export function VersionDiff({ agent, onBack }) {
 }
 export const diffChip = (bg, color) => ({ background: bg, color, fontSize: 12.5, padding: '2px 10px', borderRadius: 6, fontWeight: 600 });
 
-/* ================= 版本历史抽屉（列表 + 只读明细 + 对比 + 发布某版本） ================= */
+/* ================= 版本与回滚抽屉（列表 + 只读明细 + 对比 + 发布某版本） ================= */
 export function VersionHistory({ open, agentName, versions, headVer, liveVer, onClose, onPublish, onEditFrom }) {
   const sorted = versions.slice().sort((a, b) => b.version - a.version);
   const [tab, setTab] = useState('detail');
@@ -1072,7 +1091,7 @@ export function VersionHistory({ open, agentName, versions, headVer, liveVer, on
   };
 
   return (
-    <Drawer title={`版本历史 · ${agentName}`} width={940} open={open} onClose={onClose} styles={{ body: { padding: 0 } }}>
+    <Drawer title={`版本与回滚 · ${agentName}`} width={940} open={open} onClose={onClose} styles={{ body: { padding: 0 } }}>
       <div style={{ display: 'flex', height: '100%' }}>
         <div style={{ width: 230, borderRight: '1px solid #F1F1F5', overflow: 'auto', flexShrink: 0, padding: '8px 0' }}>
           {sorted.map(v => { const on = tab === 'detail' && v.version === sel; return (
@@ -1085,17 +1104,24 @@ export function VersionHistory({ open, agentName, versions, headVer, liveVer, on
         </div>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <div style={{ padding: '12px 18px', borderBottom: '1px solid #F1F1F5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-            <Segmented value={tab} onChange={setTab} options={[{ value: 'detail', label: '版本明细' }, { value: 'diff', label: '版本对比' }]} />
+            <Segmented value={tab} onChange={setTab} options={[{ value: 'detail', label: '版本明细 / 回滚' }, { value: 'diff', label: '版本对比' }]} />
             {tab === 'detail'
               ? <Space size={8}>
-                  <Button onClick={() => onEditFrom(sel)}>以此为基础编辑</Button>
-                  <Tooltip title={sel === liveVer ? '该版本已是线上发布版本' : '把此版本设为线上发布版本'}>
-                    <Button type="primary" disabled={sel === liveVer} onClick={() => onPublish(sel)}>{sel === liveVer ? '当前已发布' : `发布 v${sel}`}</Button>
+                  <Tooltip title="把这个历史版本载入编辑器，保存后生成一个新的 Head 版本">
+                    <Button onClick={() => onEditFrom(sel)}>回滚为新版本</Button>
+                  </Tooltip>
+                  <Tooltip title={sel === liveVer ? '该版本已是线上发布版本' : '不生成新版本，直接把此历史版本设为线上 Live 版本'}>
+                    <Button type="primary" disabled={sel === liveVer} onClick={() => onPublish(sel)}>{sel === liveVer ? '当前已发布' : `直接发布 v${sel}`}</Button>
                   </Tooltip>
                 </Space>
               : <Space size={6}><Select size="small" value={lv} style={{ width: 168 }} options={opts} onChange={setLv} /><span style={{ color: '#8A8C99' }}>→</span><Select size="small" value={rv} style={{ width: 168 }} options={opts} onChange={setRv} /></Space>}
           </div>
           <div style={{ flex: 1, overflow: 'auto', padding: 18 }}>
+            {tab === 'detail' && (
+              <div style={{ marginBottom: 12, padding: '9px 11px', border: '1px solid #E2E8F0', borderRadius: 6, background: '#F8FAFC', color: '#64748B', fontSize: 12 }}>
+                回滚有两种：`直接发布 vN` 会让线上 Live 指向历史版本；`回滚为新版本` 会把历史配置载入编辑器，保存后生成新的 Head。
+              </div>
+            )}
             {tab === 'detail' ? <ConfigDetail /> : <DiffBody />}
           </div>
         </div>
@@ -1230,31 +1256,37 @@ export function Playground({ agents, embedded }) {
     </div>
   );
   return (
-    <div>
+    <div className={embedded ? 'playground-shell playground-shell--embedded' : 'playground-shell'}>
       {!embedded
         ? (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div className="playground-header" style={{ flexWrap: 'wrap' }}>
             <div>
-              <div style={{ fontSize: 20, fontWeight: 750, letterSpacing: -0.3, color: '#17171C' }}>Playground</div>
-              <Text style={{ color: '#8A8C99', fontSize: 13.5 }}>与已发布的 Agent 对话{API_ON ? '' : '（未连后端 · 本地 mock）'}</Text>
+              <div className="playground-title">Playground</div>
+              <div className="playground-subtitle">与已发布的 Agent 对话{API_ON ? '' : '（未连后端 · 本地 mock）'}</div>
             </div>
             {agentPicker}
           </div>
         )
         : (agentPicker && <div style={{ marginBottom: 12 }}>{agentPicker}</div>)}
       {list.length === 0
-        ? <div style={{ border: '1px dashed #DEDEE3', borderRadius: 8, padding: '40px 0', background: '#FCFCFD' }}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有已发布的 Agent —— 去详情或编辑页点「发布」" /></div>
-        : <div style={{ display: 'flex', gap: 16, alignItems: 'stretch', height: 'calc(100vh - 200px)' }}>
+        ? <div className="playground-empty"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有已发布的 Agent —— 去详情或编辑页点「发布」" /></div>
+        : <div className="playground-frame" style={{ display: 'flex', gap: 16, alignItems: 'stretch' }}>
             {cfg && (
-              <div style={{ width: 184, flexShrink: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
-                <Button size="small" icon={<PlusOutlined />} onClick={() => sel && newPgSession(sel.id, { reuseEmpty: true })} style={{ marginBottom: 8 }}>新会话</Button>
-                <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <div className="playground-session-rail" style={{ width: 224, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+                <div className="playground-session-toolbar">
+                  <div>
+                    <div className="playground-session-label">会话</div>
+                    <div className="playground-session-count">{pgSessions.length} 条</div>
+                  </div>
+                  <Button size="small" icon={<PlusOutlined />} onClick={() => sel && newPgSession(sel.id, { reuseEmpty: true })}>新建</Button>
+                </div>
+                <div className="playground-session-list" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
                   {pgSessions.length === 0
                     ? <div style={{ textAlign: 'center', color: '#C2C4CE', fontSize: 12, padding: '16px 0' }}>暂无会话</div>
                     : pgSessions.map(s => (
-                      <div key={s.id} onClick={() => switchPgSession(s.id)} style={{ padding: '7px 8px', borderRadius: 8, cursor: 'pointer', marginBottom: 2, background: s.id === psid ? '#EEF0FF' : 'transparent', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <div key={s.id} className={'playground-session-item' + (s.id === psid ? ' is-active' : '')} onClick={() => switchPgSession(s.id)}>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12.5, color: s.id === psid ? '#4F46E5' : '#2A2A33', fontWeight: s.id === psid ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title || '新对话'}</div>
+                          <div style={{ fontSize: 12.5, color: s.id === psid ? ACCENT : '#334155', fontWeight: s.id === psid ? 650 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title || '新对话'}</div>
                           <div style={{ fontSize: 11, color: '#A6A8B4' }}>{s.count || 0} 条</div>
                         </div>
                         <Popconfirm title="删除该会话？" okText="删除" okButtonProps={{ danger: true }} cancelText="取消" onConfirm={() => delPgSession(s.id)}>
@@ -1265,15 +1297,15 @@ export function Playground({ agents, embedded }) {
                 </div>
               </div>
             )}
-            <div style={{ flex: 1, minWidth: 0, background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, padding: 16, height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div className="playground-main" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
               {cfg ? <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div className="playground-main-head" style={{ fontWeight: 650, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
                     {cfg.name} <span style={pill('#EEF0FF', '#4F46E5')}>{fwName(cfg.framework)}</span>
                     {(() => { const s = svcMap[sel && sel.id]; if (!s) return null; const cloud = s.location === 'cloud';
                       return <Badge status={s.status === 'running' ? 'success' : (s.status === 'failed' ? 'error' : 'processing')}
                         text={<span style={{ fontSize: 12, color: '#8A8C99', fontWeight: 400 }}>{s.isolation ? isoName(s.isolation) + ' · ' + s.isolation : ''}{cloud ? ' · 云端沙箱' : ' · 本地'}{s.status && s.status !== 'running' ? ' · ' + s.status : ''}</span>} />; })()}
                   </div>
-                  <div style={{ flex: 1, minHeight: 0 }}><DebugPanel key={sel.id + '-' + sel.version + '-' + (psid || 'x')} cfg={cfg}
+                  <div className="playground-debug-body" style={{ flex: 1, minHeight: 0 }}><DebugPanel key={sel.id + '-' + sel.version + '-' + (psid || 'x')} cfg={cfg}
                     initialMsgs={pgMsgs} onTurn={() => sel && loadPgSessions(sel.id)}
                     chatPath={psid ? `/api/sessions/${psid}/events` : `/api/agents/${sel.id}/service-chat`}
                     streamPath={psid ? `/api/sessions/${psid}/events/stream` : `/api/agents/${sel.id}/service-chat/stream`} /></div>
@@ -1479,18 +1511,25 @@ export function ChatPanel({ curWs, isAdmin, onChanged }) {
   const onInput = v => { setInput(v); setSlash(v.startsWith('/')); };
   const slashList = CHAT_SKILLS.filter(s => s.cmd.includes(input.toLowerCase()));
   const activeSkill = CHAT_SKILLS.find(s => s.mode === mode);
+  const hasConversation = msgs.some(m => m.role === 'user' || m.role === 'bot');
+  const suggestions = [
+    '列出当前空间的 Agent',
+    '创建 Agent：需求分析助手，负责把对话整理成 EARS 需求',
+    '列出已发布 Agent',
+    '提交一个平台改进需求',
+  ];
 
   return (
-    <div>
-      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+    <div className="chat-shell">
+      <div className="chat-header" style={{ marginBottom: 16, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <div>
-          <div style={{ fontSize: 20, fontWeight: 750, letterSpacing: -0.3, color: '#17171C', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="chat-title-row" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             Chat
             {copilot && (conn
               ? <Badge status={conn.running ? 'success' : 'default'} text={<span style={{ fontSize: 12, color: '#8A8C99', fontWeight: 400 }}>{conn.running ? '通用 Agent 已连接' : '通用 Agent 待启动'}</span>} />
               : <Badge status="default" text={<span style={{ fontSize: 12, color: '#A6A8B4', fontWeight: 400 }}>未连后端</span>} />)}
           </div>
-          <Text style={{ color: '#8A8C99', fontSize: 13.5 }}>平台统一入口：默认连后端通用 Agent，经平台工具真正执行；输入 / 唤起内置技能</Text>
+          <div className="chat-subtitle">平台统一入口：默认连后端通用 Agent，经平台工具真正执行；输入 / 唤起内置技能</div>
         </div>
         <Tooltip title={copilot ? '已连后端常驻通用 Agent（Claude Code + platform-ops MCP + 内置 skill）。关掉=前端轻量意图匹配' : '当前为前端轻量匹配。打开以连接真正的通用 Agent'}>
           <Space size={6} style={{ flexShrink: 0, paddingTop: 4 }}>
@@ -1499,19 +1538,23 @@ export function ChatPanel({ curWs, isAdmin, onChanged }) {
           </Space>
         </Tooltip>
       </div>
-      <div style={{ background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, height: 'calc(100vh - 200px)', display: 'flex', overflow: 'hidden' }}>
+      <div className="chat-frame" style={{ background: '#fff', border: '1px solid #dfe3ea', borderRadius: 6, display: 'flex', overflow: 'hidden' }}>
         {/* 会话侧栏：新建 / 切换 / 删除 / 历史 */}
-        <div style={{ width: 210, borderRight: '1px solid #EFEFF3', display: 'flex', flexDirection: 'column', background: '#FCFCFD' }}>
-          <div style={{ padding: 10 }}>
-            <Button block size="small" icon={<PlusOutlined />} onClick={newSession}>新对话</Button>
+        <div className="chat-session-rail" style={{ width: 210, borderRight: '1px solid #dfe3ea', display: 'flex', flexDirection: 'column', background: '#f8fafc' }}>
+          <div className="chat-session-toolbar">
+            <div>
+              <div className="chat-session-label">会话</div>
+              <div className="chat-session-count">{sessions.length} 条</div>
+            </div>
+            <Button size="small" icon={<PlusOutlined />} onClick={newSession}>新建</Button>
           </div>
           <div style={{ flex: 1, overflow: 'auto', padding: '0 6px 8px' }}>
             {sessions.length === 0
               ? <div style={{ textAlign: 'center', color: '#C2C4CE', fontSize: 12, padding: '24px 0' }}>暂无会话</div>
               : sessions.map(s => (
-                <div key={s.id} onClick={() => switchSession(s.id)} style={{ padding: '8px 9px', borderRadius: 8, cursor: 'pointer', marginBottom: 2, background: s.id === curSid ? '#EEF0FF' : 'transparent', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div key={s.id} className={'chat-session-item' + (s.id === curSid ? ' is-active' : '')} onClick={() => switchSession(s.id)} style={{ padding: '8px 9px', borderRadius: 5, cursor: 'pointer', marginBottom: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, color: s.id === curSid ? '#4F46E5' : '#2A2A33', fontWeight: s.id === curSid ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title || '新对话'}</div>
+                    <div style={{ fontSize: 13, color: s.id === curSid ? ACCENT : '#334155', fontWeight: s.id === curSid ? 650 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title || '新对话'}</div>
                     <div style={{ fontSize: 11, color: '#A6A8B4', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.updatedAt || ''} · {s.count || 0} 条</div>
                   </div>
                   <Tooltip title="重命名"><EditOutlined onClick={e => { e.stopPropagation(); setRenaming({ id: s.id, title: s.title || '' }); }} style={{ fontSize: 12, color: '#C0C2CC', flexShrink: 0 }} /></Tooltip>
@@ -1523,8 +1566,17 @@ export function ChatPanel({ curWs, isAdmin, onChanged }) {
           </div>
         </div>
         {/* 对话区 */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 16, minWidth: 0 }}>
-          <div style={{ flex: 1, overflow: 'auto', paddingRight: 4 }}>
+        <div className="chat-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <div className="chat-messages" style={{ flex: 1, overflow: 'auto', paddingRight: 4 }}>
+            {!hasConversation && (
+              <div className="chat-empty">
+                <div className="chat-empty-title">从一个明确动作开始</div>
+                <div className="chat-empty-copy">这里不是闲聊页，更像平台操作入口。你可以让通用 Agent 查询、创建、发布 Agent，或把模糊诉求收敛成需求。</div>
+                <div className="chat-suggestion-grid">
+                  {suggestions.map(x => <div key={x} className="chat-suggestion" onClick={() => setInput(x)}>{x}</div>)}
+                </div>
+              </div>
+            )}
             {msgs.map((m, i) => m.role === 'sys'
               ? <div key={i} style={{ textAlign: 'center', fontSize: 12, color: '#A6A8B4', margin: '6px 0 14px' }}>{m.text}</div>
               : <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
@@ -1533,13 +1585,13 @@ export function ChatPanel({ curWs, isAdmin, onChanged }) {
                   </div>
                 </div>)}
           </div>
-          {activeSkill && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span style={pill('#EEF0FF', '#4F46E5')}>技能：{activeSkill.name}</span>
-              <a onClick={exitSkill} style={{ fontSize: 12, color: '#8A8C99' }}>× 退出</a>
-            </div>
-          )}
-          <div style={{ position: 'relative' }}>
+          <div className="chat-composer" style={{ position: 'relative' }}>
+            {activeSkill && (
+              <div className="chat-skill-row" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <span style={pill('#EEF0FF', '#4F46E5')}>技能：{activeSkill.name}</span>
+                <a onClick={exitSkill} style={{ fontSize: 12, color: '#8A8C99' }}>× 退出</a>
+              </div>
+            )}
             {slash && slashList.length > 0 && (
               <div style={{ position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, right: 0, background: '#fff', border: '1px solid #E7E7EC', borderRadius: 10, boxShadow: '0 4px 16px rgba(20,20,45,0.10)', overflow: 'hidden', zIndex: 5 }}>
                 {slashList.map(s => (
@@ -1550,7 +1602,7 @@ export function ChatPanel({ curWs, isAdmin, onChanged }) {
                 ))}
               </div>
             )}
-            <div style={{ display: 'flex', gap: 8, paddingTop: 12, borderTop: '1px solid #F1F1F5' }}>
+            <div style={{ display: 'flex', gap: 8 }}>
               <Input placeholder={busy ? '执行中…' : '输入消息，或 / 选择技能'} value={input} disabled={busy} onChange={e => onInput(e.target.value)} onPressEnter={send} />
               <Button type="primary" icon={<SendOutlined />} onClick={send} loading={busy} />
             </div>
