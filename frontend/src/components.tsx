@@ -47,14 +47,24 @@ export function CodeEditor({ value, onChange, rows = 12 }) {
 }
 
 /* ================= 发布结果弹窗（详情/Builder 共用）================= */
-export function PublishChooser({ open, agentName, defaultIso, curIso, onCancel, onConfirm }) {
+export function PublishChooser({ open, agentName, versions, defaultVersion, defaultIso, curIso, onCancel, onConfirm }) {
   const [iso, setIso] = useState(defaultIso || 'L1');
-  // 每次打开时把选中项重置为「当前运行环境」，迁移时一眼看出从哪改到哪
-  React.useEffect(() => { if (open) setIso(defaultIso || 'L1'); }, [open, defaultIso]);
+  const [ver, setVer] = useState(defaultVersion);
+  // 每次打开时重置为「当前版本 / 当前运行环境」，迁移/回滚时一眼看出从哪改到哪
+  React.useEffect(() => { if (open) { setIso(defaultIso || 'L1'); setVer(defaultVersion); } }, [open, defaultIso, defaultVersion]);
   const migrating = curIso && iso !== curIso;
+  const hasVers = versions && versions.length > 1;
+  const latestVer = hasVers ? Math.max(...versions.map(z => z.version)) : defaultVersion;
   return (
     <Modal title={`发布${agentName ? '「' + agentName + '」' : ''}`} open={open} onCancel={onCancel}
-      okText={migrating ? '迁移并发布' : '发布'} onOk={() => onConfirm(iso)} width={520} destroyOnClose>
+      okText={migrating ? '迁移并发布' : '发布'} onOk={() => onConfirm(iso, ver)} width={520} destroyOnHidden>
+      {hasVers && (
+        <div style={{ margin: '4px 0 14px' }}>
+          <div style={{ fontSize: 13, color: '#5A5C6B', marginBottom: 6 }}>发布版本</div>
+          <Select value={ver} style={{ width: '100%' }} onChange={setVer}
+            options={versions.slice().reverse().map(x => ({ value: x.version, label: `v${x.version}${x.version === latestVer ? ' · 最新' : ''} · ${(x.createdAt || '').slice(5)}` }))} />
+        </div>
+      )}
       <div style={{ fontSize: 13, color: '#5A5C6B', margin: '4px 0 12px' }}>选择运行环境（决定隔离强度——成本与互相影响范围）{curIso ? <>；当前 <span style={pill('#F1F1F4', '#5A5C6B')}>{isoName(curIso)} · {curIso}</span></> : ''}：</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {ISOLATIONS.map(o => {
@@ -347,46 +357,47 @@ export function AgentBuilder({ mode, agent, onCancel, onSave, onCreate, onPublis
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* 紧凑顶栏：返回 + 内联名称/描述 + 框架 + 模型 + 参数 + 调试/预览 + 保存 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 14, borderBottom: '1px solid #F1F1F5', marginBottom: 16, flexWrap: 'wrap' }}>
+      {/* 顶栏：返回 + 名称/描述 ……… 预览/调试 + 主操作（拆分按钮，永不换行） */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 12, borderBottom: '1px solid #F1F1F5', marginBottom: 12 }}>
         <Button type="text" icon={<ArrowLeftOutlined />} onClick={onCancel} />
-        <div style={{ flex: 1, minWidth: 220 }}>
+        <div style={{ minWidth: 0, maxWidth: 480 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Input variant="borderless" value={name} disabled={isEdit} maxLength={50} placeholder="未命名 Agent"
-              onChange={e => setName(e.target.value)} style={{ fontSize: 18, fontWeight: 750, padding: 0, width: 280, color: '#17171C' }} />
+              onChange={e => setName(e.target.value)} style={{ fontSize: 18, fontWeight: 750, padding: 0, width: 300, color: '#17171C' }} />
             {isEdit && <span style={pill('#F1F1F4', '#5A5C6B')}>v{agent.version}</span>}
+            {nameErr && <span style={{ fontSize: 12, color: '#E5484D' }}>{nameErr}</span>}
           </div>
           <Input variant="borderless" value={desc} placeholder="添加描述…" onChange={e => setDesc(e.target.value)}
             style={{ fontSize: 12.5, padding: 0, color: '#8A8C99' }} />
-          {nameErr && <div style={{ fontSize: 12, color: '#E5484D' }}>{nameErr}</div>}
         </div>
-        <Segmented size="small" value={framework} onChange={pickFramework} disabled={isEdit}
-          options={FRAMEWORKS.map(f => ({ value: f.key, disabled: !f.enabled,
-            label: <Tooltip title={f.enabled ? '' : (f.tip || '未开放')}><span>{f.name}</span></Tooltip> }))} />
-        <Select value={model} placeholder="选择模型 *" style={{ width: 190 }} options={PROVIDERS} onChange={setModel}
-          showSearch optionFilterProp="label" status={!model ? 'warning' : ''} />
-        <Popover trigger="click" placement="bottomRight" title="模型参数" content={paramsContent}>
+        <div style={{ flex: 1 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <Tooltip title="配置预览"><Button icon={<FileTextOutlined />} type={panel === 'preview' ? 'primary' : 'default'} onClick={() => togglePanel('preview')} /></Tooltip>
+          <Button icon={<MessageOutlined />} type={panel === 'debug' ? 'primary' : 'default'} onClick={() => togglePanel('debug')}>调试</Button>
+          {isEdit
+            ? <Dropdown.Button type="primary" disabled={!canSave} icon={<DownOutlined />} onClick={() => onSave(cfg)}
+                menu={{ items: [{ key: 'pub', label: '保存并发布', onClick: askPublish }] }}>保存为新版本</Dropdown.Button>
+            : <Dropdown.Button type="primary" disabled={!canSave} icon={<DownOutlined />} onClick={createAndPublish}
+                menu={{ items: [{ key: 'draft', label: '仅创建草稿（暂不上线）', onClick: () => onSave(cfg) }] }}>创建并发布</Dropdown.Button>}
+        </div>
+      </div>
+
+      {/* 元信息条：框架 / 模型 / 参数 —— 与编辑器分区，腾出顶栏空间 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18, paddingBottom: 12, borderBottom: '1px solid #F1F1F5', marginBottom: 16, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12.5, color: '#8A8C99' }}>框架</span>
+          <Segmented size="small" value={framework} onChange={pickFramework} disabled={isEdit}
+            options={FRAMEWORKS.map(f => ({ value: f.key, disabled: !f.enabled,
+              label: <Tooltip title={f.enabled ? '' : (f.tip || '未开放')}><span>{f.name}</span></Tooltip> }))} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12.5, color: '#8A8C99' }}>模型</span>
+          <Select value={model} placeholder="选择模型 *" style={{ width: 200 }} options={PROVIDERS} onChange={setModel}
+            showSearch optionFilterProp="label" status={!model ? 'warning' : ''} />
+        </div>
+        <Popover trigger="click" placement="bottomLeft" title="模型参数" content={paramsContent}>
           <Button icon={<SettingOutlined />} disabled={!model}>参数</Button>
         </Popover>
-        <Tooltip title="配置预览"><Button icon={<FileTextOutlined />} type={panel === 'preview' ? 'primary' : 'default'} onClick={() => togglePanel('preview')} /></Tooltip>
-        <Button icon={<MessageOutlined />} type={panel === 'debug' ? 'primary' : 'default'} onClick={() => togglePanel('debug')}>调试</Button>
-        {isEdit ? (
-          <>
-            <Tooltip title="把当前已保存的最新版本上线运行（如刚改过先点保存）；点击后选运行环境"><Button onClick={askPublish}>发布</Button></Tooltip>
-            <Tooltip title={!canSave ? '无变更或必填项未完善' : ''}>
-              <Button type="primary" disabled={!canSave} onClick={() => onSave(cfg)}>保存为新版本</Button>
-            </Tooltip>
-          </>
-        ) : (
-          <>
-            <Tooltip title={!canSave ? '请填写名称并选择模型' : '只创建 v1，暂不上线运行'}>
-              <Button disabled={!canSave} onClick={() => onSave(cfg)}>仅创建草稿</Button>
-            </Tooltip>
-            <Tooltip title={!canSave ? '请填写名称并选择模型' : (!API_ON ? '发布需先在本机启动后端' : '创建 v1 并选运行环境直接上线')}>
-              <Button type="primary" disabled={!canSave} onClick={createAndPublish}>创建并发布</Button>
-            </Tooltip>
-          </>
-        )}
       </div>
 
       {/* 主区：配置编辑器为重点 + 可收起的右侧面板 */}
@@ -456,18 +467,26 @@ export function AgentBuilder({ mode, agent, onCancel, onSave, onCreate, onPublis
 
 /* ================= 详情 (Spec A) ================= */
 export function AgentDetail({ agent, service, onServiceChanged, onBack, onEdit, onDiff }) {
-  const [ver, setVer] = useState(agent.version);
+  const [viewVer, setViewVer] = useState(agent.version);  // 配置卡查看的版本（默认最新）
   const [play, setPlay] = useState(false);
   const [pub, setPub] = useState(null);
   const [choose, setChoose] = useState(false);
-  const askPublish = () => { if (!API_ON) { antMsg.info('发布需先在本机启动后端'); return; } setChoose(true); };
-  // 发布(选定版本) = 把所选 ver 以某隔离级别上线，并替换运行实例
-  const doPublish = async (iso) => {
+  const [pubVer, setPubVer] = useState(agent.version);    // 发布弹窗预选版本
+  const [showApi, setShowApi] = useState(false);          // 调用示例默认折叠
+  // —— 两个层次：发布(哪份配置上线) / 启动·停服(实例开不开) ——
+  const deploying = service && service.status === 'deploying';
+  const failed = service && service.status === 'failed';
+  const running = service && !deploying && !failed;
+  const liveIso = (service && service.isolation) || agent.publishedIsolation || 'L1';
+  const liveVer = running ? service.version : agent.publishedVersion;
+
+  const askPublish = (v) => { if (!API_ON) { antMsg.info('发布需先在本机启动后端'); return; } setPubVer(v || agent.publishedVersion || agent.version); setChoose(true); };
+  const doPublish = async (iso, version) => {
     setChoose(false);
-    try { setPub(await apiCall(`/api/agents/${agent.id}/publish?version=${ver}&isolation=${iso || 'L1'}`, { method: 'POST' })); onServiceChanged && onServiceChanged(); }
+    try { setPub(await apiCall(`/api/agents/${agent.id}/publish?version=${version}&isolation=${iso || 'L1'}`, { method: 'POST' })); onServiceChanged && onServiceChanged(); }
     catch (e) { antMsg.error('发布失败：' + e.message); }
   };
-  // 启动 = 用「已发布版本 + 原隔离级别」一键把实例拉起（不重新发布、不弹环境选择）
+  // 启动 = 用「已发布版本 + 原隔离级别」一键拉起实例（不重新发布、不弹弹窗）
   const startPublished = async () => {
     if (!API_ON) { antMsg.info('启动需先在本机启动后端'); return; }
     try { await apiCall(`/api/agents/${agent.id}/publish?version=${agent.publishedVersion}&isolation=${agent.publishedIsolation || 'L1'}`, { method: 'POST' }); antMsg.success(`已启动（v${agent.publishedVersion} · ${isoName(agent.publishedIsolation || 'L1')}）`); onServiceChanged && onServiceChanged(); }
@@ -477,139 +496,392 @@ export function AgentDetail({ agent, service, onServiceChanged, onBack, onEdit, 
     try { await apiCall(`/api/agents/${agent.id}/service/stop`, { method: 'POST' }); antMsg.success('已停服（已发布配置保留，稳定地址不变）'); onServiceChanged && onServiceChanged(); }
     catch (e) { antMsg.error('停服失败：' + e.message); }
   };
-  // 对外用**稳定地址**（按 id 经网关路由）；裸端口是内部细节、会变、勿直连
-  const stablePath = service ? `/api/agents/${agent.id}/service-chat` : '';
+  const copy = x => { navigator.clipboard && navigator.clipboard.writeText(x); antMsg.success('已复制'); };
+
+  const stablePath = `/api/agents/${agent.id}/service-chat`;
   const stableBase = service ? (service.stable_url || (location.origin + stablePath)) : '';
-  const svcCurl = stableBase ? `curl -X POST ${stableBase} \\\n  -H "Content-Type: application/json" \\\n  -d '{"message":"你好"}'` : '';
-  const svcCurlStream = stableBase ? `curl -N -X POST ${stableBase}/stream \\\n  -H "Content-Type: application/json" \\\n  -d '{"message":"你好"}'` : '';
-  // 兼容：列表项可能不带 versions（API 列表接口不返回），缺省用自身配置兜底，避免崩溃
+  const svcCurl = `curl -X POST ${stableBase} \\\n  -H "Content-Type: application/json" \\\n  -d '{"message":"你好"}'`;
+  const svcCurlStream = `curl -N -X POST ${stableBase}/stream \\\n  -H "Content-Type: application/json" \\\n  -d '{"message":"你好"}'`;
+  // 兼容：列表项可能不带 versions，缺省用自身配置兜底
   const versions = (agent.versions && agent.versions.length) ? agent.versions
     : [{ version: agent.version || 1, createdAt: agent.updatedAt || '', config: agent }];
-  const isLatest = ver === agent.version;
-  // 按所选版本读取该版本的配置快照（而非永远读最新）
-  const vc = (versions.find(v => v.version === ver) || {}).config || agent;
+  const isLatest = viewVer === agent.version;
+  const vc = (versions.find(v => v.version === viewVer) || {}).config || agent;
   const fileKeys = Object.keys(vc.files || {});
-  // —— 运行控制状态机：发布(管"哪份配置上线") / 启动·停服(管"实例开不开") ——
-  const deploying = service && service.status === 'deploying';
-  const failed = service && service.status === 'failed';
-  const running = service && !deploying && !failed;
-  const liveVer = running ? service.version : agent.publishedVersion; // 当前线上/已发布的版本
-  const canPushSelected = agent.published || running ? ver !== liveVer : true; // 选中版本可发布上线
+  // 顶部单一状态徽章
+  const statusPill = !agent.published && !service ? <span style={pill('#F1F1F4', '#A6A8B4')}>○ 未发布</span>
+    : deploying ? <span style={pill('#FFF8E6', '#946C00')}>◌ 部署中</span>
+    : failed ? <Tooltip title={service.error || ''}><span style={pill('#FDECEC', '#C0392B')}>✕ 部署失败</span></Tooltip>
+    : running ? <span style={pill('#E9F7EF', '#1E8449')}>● 运行中</span>
+    : <span style={pill('#F1F1F4', '#A6A8B4')}>○ 已停止</span>;
+  const codeBlock = { flex: 1, background: '#0f1115', color: '#a7f3d0', padding: '10px 12px', borderRadius: 8, fontSize: 12, overflow: 'auto', whiteSpace: 'pre-wrap', margin: 0 };
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
-        <Space size={12}>
+    <div style={{ maxWidth: 920 }}>
+      {/* 顶栏：名称 + 框架 + 单一状态 + 试跑/编辑 */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+        <Space size={10}>
           <Button type="text" icon={<ArrowLeftOutlined />} onClick={onBack} />
-          <span style={{ fontSize: 17, fontWeight: 700 }}>{agent.name}</span>
-          <span style={pill('#EEF0FF', '#4F46E5')}>{fwName(vc.framework)}</span>
+          <span style={{ fontSize: 18, fontWeight: 750 }}>{agent.name}</span>
+          <span style={pill('#EEF0FF', '#4F46E5')}>{fwName(agent.framework)}</span>
+          {statusPill}
         </Space>
-        <Space wrap>
-          <Select size="middle" value={ver} style={{ width: 180 }} onChange={setVer}
-            options={versions.slice().reverse().map(v => ({ value: v.version, label: `v${v.version}${v.version === agent.version ? ' · 最新' : ''} · ${(v.createdAt || '').slice(5)}` }))} />
-          <Tooltip title={versions.length < 2 ? '至少两个版本才能对比' : ''}>
-            <Button disabled={versions.length < 2} onClick={() => onDiff(agent)}>对比版本</Button>
-          </Tooltip>
+        <Space>
           <Button icon={<ThunderboltOutlined />} onClick={() => setPlay(true)}>试跑</Button>
           <Button type="primary" icon={<EditOutlined />} onClick={() => onEdit(agent)}>编辑</Button>
         </Space>
       </div>
+
       <PublishChooser open={choose} agentName={agent.name}
-        defaultIso={(service && service.isolation) || agent.publishedIsolation || 'L1'}
-        curIso={(service && service.isolation) || agent.publishedIsolation || null}
+        versions={versions} defaultVersion={pubVer}
+        defaultIso={liveIso} curIso={agent.published ? liveIso : null}
         onCancel={() => setChoose(false)} onConfirm={doPublish} />
       <PublishModal pub={pub} agentName={agent.name} onClose={() => setPub(null)} />
-      {(
-        <div style={{ background: '#fff', border: '1px solid #ECECEF', borderRadius: 8, padding: '12px 16px', marginBottom: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-            <div style={{ fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <span style={{ fontWeight: 650 }}>运行</span>
-              <span style={pill('#EEF0FF', '#4F46E5')}>{fwName(agent.framework)}</span>
-              {service && service.isolation && <span style={pill('#F1F1F4', '#5A5C6B')}>{isoName(service.isolation)} · {service.isolation}</span>}
-              {service && (service.location === 'cloud'
-                ? <span style={pill('#EEF0FF', '#4F46E5')}>☁ 云端</span>
-                : <span style={pill('#F1F1F4', '#5A5C6B')}>本地</span>)}
-              {!agent.published && !service
-                ? <span style={pill('#F1F1F4', '#A6A8B4')}>未发布</span>
-                : deploying
-                  ? <span style={pill('#FFF8E6', '#946C00')}>◌ 部署中…（云端约 1–2 分钟）</span>
-                  : failed
-                    ? <Tooltip title={service.error || ''}><span style={pill('#FDECEC', '#C0392B')}>✕ 部署失败</span></Tooltip>
-                    : running
-                      ? <><span style={pill('#E9F7EF', '#1E8449')}>● 运行中 v{service.version}</span><Tooltip title={'内部端口（会变，勿直连）：' + (service.internal_url || service.url || '')}><Text code style={{ fontSize: 12 }}>{stablePath}</Text></Tooltip></>
-                      : <span style={pill('#F1F1F4', '#A6A8B4')}>○ 已发布 v{agent.publishedVersion} · 已停止</span>}
-            </div>
-            <Space>
-              {/* 状态机：发布(把所选版本上线) 与 启动/停服(实例开关) 分层，互不抢位 */}
-              {!agent.published && !service
-                ? <Button size="small" type="primary" onClick={askPublish}>发布并启动</Button>
-                : deploying
-                  ? <Button size="small" loading disabled>部署中</Button>
-                  : failed
-                    ? <Button size="small" type="primary" onClick={askPublish}>重新发布</Button>
-                    : running
-                      ? <>
-                          {/* 发布：可换版本，也可换环境（本地↔云端迁移）——始终可点，不再只在有新版本时出现 */}
-                          <Tooltip title={canPushSelected ? `把所选 v${ver} 上线，替换运行中的 v${service.version}` : '换运行环境后重新发布（如本地→云端），替换当前实例'}>
-                            <Button size="small" type={canPushSelected ? 'primary' : 'default'} onClick={askPublish}>{canPushSelected ? `发布 v${ver}` : '重新发布'}</Button>
-                          </Tooltip>
-                          <Popconfirm title="停止该 Agent 服务？" description="仅停实例，已发布配置与稳定地址保留" onConfirm={stopService}><Button size="small" danger>停服</Button></Popconfirm>
-                        </>
-                      : <>
-                          <Tooltip title={`用已发布的 v${agent.publishedVersion} · ${isoName(agent.publishedIsolation || 'L1')} 原样拉起（同环境，一键）`}><Button size="small" type="primary" onClick={startPublished}>启动</Button></Tooltip>
-                          {/* 换环境/版本再上线：本地→云端走这里 */}
-                          <Tooltip title={canPushSelected ? `改发布所选 v${ver}（可换运行环境）` : '换运行环境重新发布（如本地→云端）'}>
-                            <Button size="small" onClick={askPublish}>{canPushSelected ? `发布 v${ver}` : '重新发布'}</Button>
-                          </Tooltip>
-                        </>}
-            </Space>
+
+      {/* ① 运行卡片：状态 + 操作 + 调用方式 */}
+      <div style={{ background: '#fff', border: '1px solid #ECECEF', borderRadius: 10, padding: '14px 18px', marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13.5 }}>
+            <span style={{ fontWeight: 700, fontSize: 14 }}>运行</span>
+            {!agent.published && !service
+              ? <span style={{ color: '#8A8C99' }}>未发布 —— 发布后即可通过稳定 API 调用</span>
+              : <>
+                  <span style={pill('#F1F1F4', '#5A5C6B')}>v{liveVer}</span>
+                  <span style={pill('#F1F1F4', '#5A5C6B')}>{isoName(liveIso)} · {liveIso}</span>
+                  {service && (service.location === 'cloud'
+                    ? <span style={pill('#EEF0FF', '#4F46E5')}>☁ 云端</span>
+                    : <span style={pill('#F1F1F4', '#5A5C6B')}>本地</span>)}
+                  {deploying && <span style={{ color: '#946C00', fontSize: 12.5 }}>部署中…（云端约 1–2 分钟）</span>}
+                </>}
           </div>
-          {agent.framework === 'OPENCLAW' && (
-            <div style={{ marginTop: 8, fontSize: 12, color: '#4F46E5', background: '#EEF0FF', border: '1px solid #C7CBF5', borderRadius: 6, padding: '6px 10px' }}>
-              OpenClaw：本 Agent 由平台共享 Gateway 托管（一个 Gateway 托多个 agent，按 agentId 路由）；本机未装 openclaw 时回退 mock，装上即走真实 CLI。
-            </div>
-          )}
-          {service && service.status !== 'deploying' && service.status !== 'failed' && (
-            <div style={{ marginTop: 10 }}>
-              <div style={{ fontSize: 12, color: '#8A8C99', marginBottom: 6 }}>API 调用（请求 <Text code style={{ fontSize: 11.5 }}>{'{message, session_id?}'}</Text>；多轮把返回的 session_id 带回）。下面用的是<b>稳定地址</b><Text code style={{ fontSize: 11.5 }}>/api/agents/{agent.id}/service-chat[/stream]</Text>（按 id 路由）——上游绑这个，<b>别直连裸端口</b>（会变）。</div>
-              <div style={{ fontSize: 12, color: '#5A5C6B', margin: '4px 0' }}>① 一次性（协议1）→ <Text code style={{ fontSize: 11.5 }}>{'{reply, session_id, engine}'}</Text></div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                <pre style={{ flex: 1, background: '#0f1115', color: '#a7f3d0', padding: '10px 12px', borderRadius: 8, fontSize: 12, overflow: 'auto', whiteSpace: 'pre-wrap', margin: 0 }}>{svcCurl}</pre>
-                <Button size="small" onClick={() => { navigator.clipboard && navigator.clipboard.writeText(svcCurl); antMsg.success('已复制'); }}>复制</Button>
-              </div>
-              <div style={{ fontSize: 12, color: '#5A5C6B', margin: '10px 0 4px' }}>② SSE 流式（协议2）→ <Text code style={{ fontSize: 11.5 }}>text/event-stream</Text>，事件 <Text code style={{ fontSize: 11.5 }}>delta/done/error</Text></div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                <pre style={{ flex: 1, background: '#0f1115', color: '#a7f3d0', padding: '10px 12px', borderRadius: 8, fontSize: 12, overflow: 'auto', whiteSpace: 'pre-wrap', margin: 0 }}>{svcCurlStream}</pre>
-                <Button size="small" onClick={() => { navigator.clipboard && navigator.clipboard.writeText(svcCurlStream); antMsg.success('已复制'); }}>复制</Button>
-              </div>
-            </div>
-          )}
+          <Space>
+            {!agent.published && !service
+              ? <Button type="primary" onClick={() => askPublish()}>发布</Button>
+              : deploying
+                ? <Button loading disabled>部署中</Button>
+                : failed
+                  ? <Button type="primary" onClick={() => askPublish()}>重新发布</Button>
+                  : running
+                    ? <>
+                        <Tooltip title="换版本 / 换运行环境（本地↔云端）重新发布"><Button onClick={() => askPublish()}>更改发布…</Button></Tooltip>
+                        <Popconfirm title="停止该 Agent 服务？" description="仅停实例，已发布配置与稳定地址保留" onConfirm={stopService}><Button danger>停服</Button></Popconfirm>
+                      </>
+                    : <>
+                        <Tooltip title={`用已发布的 v${agent.publishedVersion} · ${isoName(agent.publishedIsolation || 'L1')} 原样拉起`}><Button type="primary" onClick={startPublished}>启动</Button></Tooltip>
+                        <Tooltip title="换版本 / 换运行环境（本地↔云端）重新发布"><Button onClick={() => askPublish()}>更改发布…</Button></Tooltip>
+                      </>}
+          </Space>
         </div>
-      )}
-      <Drawer title={`试跑 · ${agent.name}（v${ver}）`} width={440} open={play} onClose={() => setPlay(false)}
-        styles={{ header: { borderBottom: '1px solid #F1F1F5' }, body: { display: 'flex', flexDirection: 'column' } }}>
-        <div style={{ flex: 1, minHeight: 0 }}><DebugPanel cfg={vc} /></div>
-      </Drawer>
-      <div style={{ background: isLatest ? '#F5F5FE' : '#FFF8E6', border: '1px solid ' + (isLatest ? '#E3E3FA' : '#FCE2A0'), borderRadius: 8, padding: '8px 14px', marginBottom: 12, fontSize: 13, color: isLatest ? '#4F46E5' : '#946C00' }}>
-        {isLatest ? `正在查看最新版本 v${ver}` : `正在只读查看历史版本 v${ver}；点编辑将基于该版本生成新版本。`}
+
+        {running && (
+          <div style={{ marginTop: 12, borderTop: '1px solid #F4F4F7', paddingTop: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12.5, color: '#8A8C99' }}>调用地址</span>
+              <Text code style={{ fontSize: 12 }}>{stablePath}</Text>
+              <a onClick={() => copy(stableBase)} style={{ fontSize: 12, color: ACCENT }}>复制</a>
+              <span style={{ flex: 1 }} />
+              <a onClick={() => setShowApi(s => !s)} style={{ fontSize: 12, color: ACCENT }}>{showApi ? '收起调用示例' : '查看调用示例'}</a>
+            </div>
+            {showApi && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 12, color: '#8A8C99', marginBottom: 8 }}>请求 <Text code style={{ fontSize: 11.5 }}>{'{message, session_id?}'}</Text>；多轮把返回的 session_id 带回。按 id 路由的<b>稳定地址</b>，端口是内部细节、勿直连。</div>
+                <div style={{ fontSize: 12, color: '#5A5C6B', margin: '4px 0' }}>① 一次性 → <Text code style={{ fontSize: 11.5 }}>{'{reply, session_id}'}</Text></div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <pre style={codeBlock}>{svcCurl}</pre>
+                  <Button size="small" onClick={() => copy(svcCurl)}>复制</Button>
+                </div>
+                <div style={{ fontSize: 12, color: '#5A5C6B', margin: '10px 0 4px' }}>② SSE 流式 → <Text code style={{ fontSize: 11.5 }}>text/event-stream</Text>（delta/done/error）</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                  <pre style={codeBlock}>{svcCurlStream}</pre>
+                  <Button size="small" onClick={() => copy(svcCurlStream)}>复制</Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        {agent.framework === 'OPENCLAW' && agent.published && (
+          <div style={{ marginTop: 10, fontSize: 12, color: '#4F46E5', background: '#EEF0FF', border: '1px solid #C7CBF5', borderRadius: 6, padding: '6px 10px' }}>
+            OpenClaw 由平台共享 Gateway 托管（按 agentId 路由）；本机未装 openclaw 时回退 mock。
+          </div>
+        )}
       </div>
-      <div style={{ background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, padding: 20 }}>
-        <Descriptions column={2} size="small" colon={false} labelStyle={{ color: '#8A8C99', fontSize: 13, width: 80 }} contentStyle={{ fontSize: 13.5 }}
+
+      {/* ② 配置卡片：默认看最新，历史版本可在此切换 */}
+      <div style={{ background: '#fff', border: '1px solid #EBEBF1', borderRadius: 10, padding: '16px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 10, flexWrap: 'wrap' }}>
+          <Space size={8}>
+            <span style={{ fontSize: 14, fontWeight: 700 }}>配置</span>
+            <span style={pill(isLatest ? '#EEF0FF' : '#FFF3DC', isLatest ? '#4F46E5' : '#946C00')}>v{viewVer}{isLatest ? ' · 最新' : ' · 历史·只读'}</span>
+            {liveVer === viewVer && agent.published && <span style={pill('#E9F7EF', '#1E8449')}>当前发布</span>}
+          </Space>
+          <Space size={6}>
+            {!isLatest && <Button size="small" onClick={() => askPublish(viewVer)}>以此版本发布</Button>}
+            {versions.length > 1 && <Button size="small" onClick={() => onDiff(agent)}>对比版本</Button>}
+            {versions.length > 1 && <Select size="small" value={viewVer} style={{ width: 160 }} onChange={setViewVer}
+              options={versions.slice().reverse().map(v => ({ value: v.version, label: `v${v.version}${v.version === agent.version ? ' · 最新' : ''} · ${(v.createdAt || '').slice(5)}` }))} />}
+          </Space>
+        </div>
+        <Descriptions column={2} size="small" colon={false} labelStyle={{ color: '#8A8C99', fontSize: 13, width: 56 }} contentStyle={{ fontSize: 13.5 }}
           items={[
             { label: '描述', children: vc.desc || '—', span: 2 },
             { label: '模型', children: <Text code>{vc.model}</Text> },
-            { label: '查看版本', children: `v${ver}` },
-            { label: 'Temp', children: vc.params ? vc.params.temperature : '—' },
-            { label: 'MaxTokens', children: vc.params ? vc.params.max_tokens : '—' },
-            { label: '工具', span: 2, children: (vc.tools && vc.tools.length) ? vc.tools.map(id => <Tag key={id} bordered={false} style={{ background: '#EEF0FF', color: ACCENT }}>{(TOOLS.find(t => t.id === id) || {}).name}</Tag>) : '—' },
-            { label: '技能', span: 2, children: (vc.skills && vc.skills.length) ? vc.skills.map(id => <Tag key={id} bordered={false} style={{ background: '#F1F1F4', color: '#4A4A55' }}>{(SKILLS.find(s => s.id === id) || {}).name}</Tag>) : '—' },
+            { label: '参数', children: `温度 ${vc.params ? vc.params.temperature : '—'} · MaxTokens ${vc.params ? vc.params.max_tokens : '—'}` },
+            { label: '工具', span: 2, children: (vc.tools && vc.tools.length) ? vc.tools.map(id => <Tag key={id} bordered={false} style={{ background: '#EEF0FF', color: ACCENT }}>{(TOOLS.find(t => t.id === id) || {}).name || id}</Tag>) : '—' },
+            { label: '技能', span: 2, children: (vc.skills && vc.skills.length) ? vc.skills.map(id => <Tag key={id} bordered={false} style={{ background: '#F1F1F4', color: '#4A4A55' }}>{(SKILLS.find(s => s.id === id) || {}).name || id}</Tag>) : '—' },
           ]} />
-        <Divider style={{ margin: '14px 0' }} />
-        <Text style={{ fontSize: 13, fontWeight: 650, color: '#33333C' }}>配置文件 · v{ver}</Text>
+        <Divider style={{ margin: '14px 0 12px' }} />
+        <Text style={{ fontSize: 13, fontWeight: 650, color: '#33333C' }}>配置文件</Text>
         <div style={{ marginTop: 12 }}>
           <Collapse activeKey={fileKeys} items={fileKeys.map(k => ({ key: k, label: k,
             children: <pre style={{ background: '#FAFAFC', border: '1px solid #F1F1F5', color: '#33333C', padding: 14, borderRadius: 8, fontSize: 12.5, lineHeight: 1.6, overflow: 'auto', fontFamily: 'ui-monospace, Menlo, monospace', margin: 0 }}>{vc.files[k]}</pre> }))} />
         </div>
       </div>
+
+      <Drawer title={`试跑 · ${agent.name}（v${viewVer}）`} width={440} open={play} onClose={() => setPlay(false)}
+        styles={{ header: { borderBottom: '1px solid #F1F1F5' }, body: { display: 'flex', flexDirection: 'column' } }}>
+        <div style={{ flex: 1, minHeight: 0 }}><DebugPanel cfg={vc} /></div>
+      </Drawer>
+    </div>
+  );
+}
+
+/* ================= 工作台（方案A：创作+查看+运维+试跑 合一） ================= */
+export function AgentWorkbench({ mode, agent: agentProp, service, wsId, onBack, onCreate, onSaveStay, onChanged, onDiff }) {
+  const [savedAgent, setSavedAgent] = useState(agentProp || null); // 已保存的完整 agent（含 versions）
+  const isCreate = !savedAgent;
+  const ws = wsId || (agentProp && agentProp.wsId);
+  // —— 可编辑配置态 ——
+  const base = agentProp || {};
+  const [framework, setFramework] = useState(base.framework || 'CLAUDE_CODE');
+  const [name, setName] = useState(base.name || '');
+  const [desc, setDesc] = useState(base.desc || '');
+  const [model, setModel] = useState(base.model);
+  const [params, setParams] = useState(base.params || { temperature: 0.7, max_tokens: 4096 });
+  const [files, setFiles] = useState(base.files ? { ...base.files } : { ...TEMPLATES['CLAUDE_CODE'] });
+  const [tools, setTools] = useState(base.tools || []);
+  const [skills, setSkills] = useState(base.skills || []);
+  const [activeFile, setActiveFile] = useState(Object.keys(base.files || TEMPLATES['CLAUDE_CODE'])[0]);
+  const [drawer, setDrawer] = useState(null);
+  const [pub, setPub] = useState(null);
+  const [choose, setChoose] = useState(false);
+  const [pubVer, setPubVer] = useState(base.version || 1);
+  const [showApi, setShowApi] = useState(false);
+  const [testTarget, setTestTarget] = useState('draft'); // draft（试当前配置）| live（试线上服务）
+  const [histOpen, setHistOpen] = useState(false);       // 版本历史抽屉
+  const cfg = { name, desc, framework, model, params, files, tools, skills };
+  const fileKeys = Object.keys(TEMPLATES[framework]);
+
+  // 拉取完整 agent（含 versions）兜底
+  React.useEffect(() => {
+    if (!savedAgent || !API_ON || savedAgent.versions) return;
+    apiCall(`/api/agents/${savedAgent.id}`).then(full => setSavedAgent(s => ({ ...s, ...full }))).catch(() => {});
+  }, [savedAgent && savedAgent.id]);
+  const refetch = () => { if (savedAgent && API_ON) apiCall(`/api/agents/${savedAgent.id}`).then(full => setSavedAgent(s => ({ ...s, ...full }))).catch(() => {}); };
+
+  // —— 运行态机 ——
+  const deploying = service && service.status === 'deploying';
+  const failed = service && service.status === 'failed';
+  const running = service && !deploying && !failed;
+  const published = savedAgent && savedAgent.published;
+  const liveIso = (service && service.isolation) || (savedAgent && savedAgent.publishedIsolation) || 'L1';
+  const liveVer = running ? service.version : (savedAgent && savedAgent.publishedVersion);
+  const versions = (savedAgent && savedAgent.versions && savedAgent.versions.length) ? savedAgent.versions : (savedAgent ? [{ version: savedAgent.version || 1, createdAt: savedAgent.updatedAt || '', config: savedAgent }] : []);
+
+  const baseline = savedAgent ? { name: savedAgent.name, desc: savedAgent.desc, framework: savedAgent.framework, model: savedAgent.model, params: savedAgent.params, files: savedAgent.files, tools: savedAgent.tools, skills: savedAgent.skills } : null;
+  const nameErr = name && (name.length < 2 || name.length > 50) ? '名称需 2-50 字符' : '';
+  const dirty = isCreate || JSON.stringify(cfg) !== JSON.stringify(baseline);
+  const canSave = name && !nameErr && model && dirty;
+
+  const pickFramework = key => { setFramework(key); if (isCreate) { setFiles({ ...TEMPLATES[key] }); setActiveFile(Object.keys(TEMPLATES[key])[0]); } };
+  // 把某历史版本载入编辑器（head）：编辑后保存即生成新版本（= 回滚为新版本）
+  const loadVersion = v => { const vc = (versions.find(x => x.version === v) || {}).config; if (!vc) return; setModel(vc.model); setDesc(vc.desc || ''); setParams(vc.params || params); setFiles({ ...vc.files }); setTools(vc.tools || []); setSkills(vc.skills || []); setActiveFile(Object.keys(vc.files || {})[0]); };
+
+  // —— 保存 / 创建 / 发布 / 启停 ——
+  const saveVersion = async () => { const a = await onSaveStay(savedAgent, cfg); if (a) setSavedAgent(a); return a; };
+  const createDraft = async () => { const a = await onCreate(cfg); if (a) { setSavedAgent(a); onChanged && onChanged(); } return a; };
+  const primarySave = async () => { if (isCreate) { const a = await createDraft(); if (a) askPublish(a.version, a); } else { const a = await saveVersion(); if (a) askPublish(a.version, a); } };
+  const askPublish = (v, a) => { if (!API_ON) { antMsg.info('发布需先在本机启动后端'); return; } setPubVer(v || liveVer || (savedAgent && savedAgent.version) || 1); setChoose(true); };
+  const doPublish = async (iso, version) => {
+    setChoose(false); const tgt = savedAgent; if (!tgt) return;
+    try { setPub(await apiCall(`/api/agents/${tgt.id}/publish?version=${version}&isolation=${iso || 'L1'}`, { method: 'POST', body: '{}' })); onChanged && onChanged(); refetch(); }
+    catch (e) { antMsg.error('发布失败：' + e.message); }
+  };
+  const startPublished = async () => { if (!API_ON || !savedAgent) return; try { await apiCall(`/api/agents/${savedAgent.id}/publish?version=${savedAgent.publishedVersion}&isolation=${savedAgent.publishedIsolation || 'L1'}`, { method: 'POST', body: '{}' }); antMsg.success(`已启动（v${savedAgent.publishedVersion} · ${isoName(savedAgent.publishedIsolation || 'L1')}）`); onChanged && onChanged(); refetch(); } catch (e) { antMsg.error('启动失败：' + e.message); } };
+  const stopService = async () => { if (!savedAgent) return; try { await apiCall(`/api/agents/${savedAgent.id}/service/stop`, { method: 'POST' }); antMsg.success('已停服（已发布配置保留，稳定地址不变）'); onChanged && onChanged(); refetch(); } catch (e) { antMsg.error('停服失败：' + e.message); } };
+
+  const stablePath = savedAgent ? `/api/agents/${savedAgent.id}/service-chat` : '';
+  const stableBase = service ? (service.stable_url || (location.origin + stablePath)) : '';
+  const copy = x => { navigator.clipboard && navigator.clipboard.writeText(x); antMsg.success('已复制'); };
+  const codeBlock = { flex: 1, background: '#0f1115', color: '#a7f3d0', padding: '9px 11px', borderRadius: 7, fontSize: 11.5, overflow: 'auto', whiteSpace: 'pre-wrap', margin: 0 };
+
+  const statusPill = !published && !service ? <span style={pill('#F1F1F4', '#A6A8B4')}>○ 未发布</span>
+    : deploying ? <span style={pill('#FFF8E6', '#946C00')}>◌ 部署中</span>
+    : failed ? <Tooltip title={service.error || ''}><span style={pill('#FDECEC', '#C0392B')}>✕ 失败</span></Tooltip>
+    : running ? <span style={pill('#E9F7EF', '#1E8449')}>● 运行中</span>
+    : <span style={pill('#F1F1F4', '#A6A8B4')}>○ 已停止</span>;
+
+  const paramsContent = (
+    <div style={{ width: 280 }}>
+      {MODEL_PARAMS.map(p => (
+        <div key={p.key} style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 12.5, color: '#5A5C6B', marginBottom: 4 }}>{p.label}</div>
+          {p.type === 'slider'
+            ? <Slider min={p.min} max={p.max} step={p.step} value={params[p.key]} onChange={v => setParams({ ...params, [p.key]: v })} />
+            : <InputNumber min={p.min} max={p.max} value={params[p.key]} style={{ width: '100%' }} onChange={v => setParams({ ...params, [p.key]: v })} />}
+        </div>
+      ))}
+    </div>
+  );
+
+  const svcCurl = `curl -X POST ${stableBase} \\\n  -H "Content-Type: application/json" \\\n  -d '{"message":"你好"}'`;
+  const svcCurlStream = `curl -N -X POST ${stableBase}/stream \\\n  -H "Content-Type: application/json" \\\n  -d '{"message":"你好"}'`;
+  const testCfg = { ...cfg, id: savedAgent && savedAgent.id };
+
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* 顶栏：名称 + 状态 ……… 版本 + 保存 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 12, borderBottom: '1px solid #F1F1F5', marginBottom: 12 }}>
+        <Button type="text" icon={<ArrowLeftOutlined />} onClick={onBack} />
+        <Input variant="borderless" value={name} disabled={!isCreate} maxLength={50} placeholder="未命名 Agent"
+          onChange={e => setName(e.target.value)} style={{ fontSize: 18, fontWeight: 750, padding: 0, width: 240, color: '#17171C', flexShrink: 0 }} />
+        <span style={pill('#EEF0FF', '#4F46E5')}>{fwName(framework)}</span>
+        {!isCreate && statusPill}
+        {nameErr && <span style={{ fontSize: 12, color: '#E5484D' }}>{nameErr}</span>}
+        <div style={{ flex: 1 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {!isCreate && (
+            <>
+              <span style={pill('#F1F1F4', '#5A5C6B')}>v{savedAgent.version}</span>
+              <Button size="small" icon={<BranchesOutlined />} onClick={() => setHistOpen(true)}>版本历史{versions.length > 1 ? ` · ${versions.length}` : ''}</Button>
+            </>
+          )}
+          {isCreate
+            ? <Dropdown.Button type="primary" disabled={!canSave} icon={<DownOutlined />} onClick={primarySave}
+                menu={{ items: [{ key: 'draft', label: '仅创建草稿（暂不上线）', onClick: createDraft }] }}>创建并发布</Dropdown.Button>
+            : <Dropdown.Button type="primary" disabled={!canSave} icon={<DownOutlined />} onClick={saveVersion}
+                menu={{ items: [{ key: 'pub', label: '保存并发布', onClick: primarySave }] }}>保存为新版本</Dropdown.Button>}
+        </div>
+      </div>
+
+      {/* 主体：中（配置编辑）+ 右（运行 & 试跑） */}
+      <div style={{ flex: 1, display: 'flex', gap: 14, minHeight: 0 }}>
+        {/* 中：配置 */}
+        <div style={{ flex: 1, overflow: 'auto', minWidth: 0, paddingRight: 2 }}>
+          {/* 元信息条 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
+            <Input variant="borderless" value={desc} placeholder="添加描述…" onChange={e => setDesc(e.target.value)} style={{ fontSize: 13, padding: 0, color: '#8A8C99', width: 260 }} />
+            <div style={{ flex: 1 }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12.5, color: '#8A8C99' }}>框架</span>
+              <Segmented size="small" value={framework} onChange={pickFramework} disabled={!isCreate}
+                options={FRAMEWORKS.map(f => ({ value: f.key, disabled: !f.enabled, label: <Tooltip title={f.enabled ? '' : (f.tip || '未开放')}><span>{f.name}</span></Tooltip> }))} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 12.5, color: '#8A8C99' }}>模型</span>
+              <Select value={model} placeholder="选择模型 *" style={{ width: 180 }} options={PROVIDERS} onChange={setModel} showSearch optionFilterProp="label" status={!model ? 'warning' : ''} />
+            </div>
+            <Popover trigger="click" placement="bottomRight" title="模型参数" content={paramsContent}>
+              <Button icon={<SettingOutlined />} disabled={!model}>参数</Button>
+            </Popover>
+          </div>
+
+          <div style={{ background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, padding: 16, marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <Text style={{ fontSize: 13, fontWeight: 650, color: '#33333C' }}>指令文件 · {fwName(framework)}</Text>
+              <Button size="small" type="text" style={{ color: ACCENT }} onClick={() => setFiles({ ...TEMPLATES[framework] })}>重置为模板</Button>
+            </div>
+            {fileKeys.length > 1 ? (
+              <Tabs activeKey={activeFile} onChange={setActiveFile} size="small"
+                items={fileKeys.map(k => ({ key: k, label: <span>{k}{files[k] && files[k].trim() ? <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 3, background: ACCENT, marginLeft: 6, verticalAlign: 'middle' }} /> : null}</span>,
+                  children: <CodeEditor value={files[k] || ''} onChange={v => setFiles({ ...files, [k]: v })} rows={16} /> }))} />
+            ) : <CodeEditor value={files[fileKeys[0]] || ''} onChange={v => setFiles({ ...files, [fileKeys[0]]: v })} rows={16} />}
+          </div>
+
+          <div style={{ background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, padding: 16 }}>
+            <Text style={{ fontSize: 13, fontWeight: 650, color: '#33333C' }}>能力</Text>
+            <div style={{ display: 'flex', gap: 24, marginTop: 12, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ color: '#5A5C6B', fontSize: 13 }}><ToolOutlined /> 工具</span>
+                  <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => setDrawer('tool')}>添加</Button>
+                </div>
+                <div>{tools.length === 0 ? <Text style={{ color: '#A6A8B4', fontSize: 12 }}>未选择</Text> :
+                  tools.map(id => { const t = TOOLS.find(x => x.id === id); return <Tag key={id} closable bordered={false} onClose={() => setTools(tools.filter(x => x !== id))} style={{ marginBottom: 6, background: '#EEF0FF', color: ACCENT }}>{(t && t.name) || id}</Tag>; })}</div>
+              </div>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ color: '#5A5C6B', fontSize: 13 }}><BulbOutlined /> 技能</span>
+                  <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => setDrawer('skill')}>添加</Button>
+                </div>
+                <div>{skills.length === 0 ? <Text style={{ color: '#A6A8B4', fontSize: 12 }}>未选择</Text> :
+                  skills.map(id => { const s = SKILLS.find(x => x.id === id); return <Tag key={id} closable bordered={false} onClose={() => setSkills(skills.filter(x => x !== id))} style={{ marginBottom: 6, background: '#F1F1F4', color: '#4A4A55' }}>{(s && s.name) || id}</Tag>; })}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 右：运行 & 试跑 —— 常驻 */}
+        <div style={{ width: 400, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
+          {/* 运行面板 */}
+          <div style={{ background: '#fff', border: '1px solid #ECECEF', borderRadius: 8, padding: '12px 14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5 }}>
+                <span style={{ fontWeight: 700, fontSize: 13.5 }}>运行</span>
+                {isCreate ? <span style={{ color: '#A6A8B4' }}>创建后可发布</span>
+                  : !published && !service ? <span style={{ color: '#A6A8B4' }}>未发布</span>
+                  : <><span style={pill('#F1F1F4', '#5A5C6B')}>v{liveVer}</span><span style={pill('#F1F1F4', '#5A5C6B')}>{isoName(liveIso)}·{liveIso}</span>{service && (service.location === 'cloud' ? <span style={pill('#EEF0FF', '#4F46E5')}>☁云</span> : <span style={pill('#F1F1F4', '#5A5C6B')}>本地</span>)}</>}
+              </div>
+              {!isCreate && <Space size={6}>
+                {!published && !service ? <Button size="small" type="primary" onClick={() => askPublish()}>发布</Button>
+                  : deploying ? <Button size="small" loading disabled>部署中</Button>
+                  : failed ? <Button size="small" type="primary" onClick={() => askPublish()}>重新发布</Button>
+                  : running ? <><Tooltip title="换版本/环境（本地↔云）"><Button size="small" onClick={() => askPublish()}>更改发布</Button></Tooltip><Popconfirm title="停止该服务？" description="仅停实例，已发布配置保留" onConfirm={stopService}><Button size="small" danger>停服</Button></Popconfirm></>
+                  : <><Tooltip title={`用已发布 v${savedAgent.publishedVersion}·${isoName(liveIso)} 原样拉起`}><Button size="small" type="primary" onClick={startPublished}>启动</Button></Tooltip><Button size="small" onClick={() => askPublish()}>更改发布</Button></>}
+              </Space>}
+            </div>
+            {running && (
+              <div style={{ marginTop: 10, borderTop: '1px solid #F4F4F7', paddingTop: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <Text code style={{ fontSize: 11.5 }}>{stablePath}</Text>
+                  <a onClick={() => copy(stableBase)} style={{ fontSize: 11.5, color: ACCENT }}>复制</a>
+                  <span style={{ flex: 1 }} />
+                  <a onClick={() => setShowApi(s => !s)} style={{ fontSize: 11.5, color: ACCENT }}>{showApi ? '收起示例' : '调用示例'}</a>
+                </div>
+                {showApi && <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 11.5, color: '#5A5C6B', margin: '2px 0' }}>① 一次性</div>
+                  <div style={{ display: 'flex', gap: 6 }}><pre style={codeBlock}>{svcCurl}</pre><Button size="small" onClick={() => copy(svcCurl)}>复制</Button></div>
+                  <div style={{ fontSize: 11.5, color: '#5A5C6B', margin: '8px 0 2px' }}>② SSE 流式</div>
+                  <div style={{ display: 'flex', gap: 6 }}><pre style={codeBlock}>{svcCurlStream}</pre><Button size="small" onClick={() => copy(svcCurlStream)}>复制</Button></div>
+                </div>}
+              </div>
+            )}
+          </div>
+          {/* 试跑控制台 */}
+          <div style={{ flex: 1, minHeight: 0, background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, padding: 14, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <Text style={{ fontSize: 13, fontWeight: 650 }}>试跑</Text>
+              {running
+                ? <Segmented size="small" value={testTarget} onChange={setTestTarget} options={[{ value: 'draft', label: '当前配置' }, { value: 'live', label: '线上服务' }]} />
+                : <span style={{ fontSize: 11.5, color: '#A6A8B4' }}>试当前配置</span>}
+            </div>
+            <div style={{ flex: 1, minHeight: 0 }}>
+              {testTarget === 'live' && running
+                ? <DebugPanel key="live" cfg={testCfg} streamPath={`/api/agents/${savedAgent.id}/service-chat/stream`} />
+                : <DebugPanel key="draft" cfg={testCfg} />}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <AssetDrawer open={drawer === 'tool'} type="tool" wsId={ws} selected={tools} onClose={() => setDrawer(null)} onConfirm={s => { setTools(s); setDrawer(null); }} />
+      <AssetDrawer open={drawer === 'skill'} type="skill" wsId={ws} selected={skills} onClose={() => setDrawer(null)} onConfirm={s => { setSkills(s); setDrawer(null); }} />
+      <PublishChooser open={choose} agentName={name} versions={versions} defaultVersion={pubVer}
+        defaultIso={liveIso} curIso={published ? liveIso : null}
+        onCancel={() => setChoose(false)} onConfirm={doPublish} />
+      <PublishModal pub={pub} agentName={name} onClose={() => setPub(null)} />
+      {!isCreate && <VersionHistory open={histOpen} agentName={name} versions={versions} headVer={savedAgent.version} liveVer={liveVer}
+        onClose={() => setHistOpen(false)}
+        onPublish={v => { setHistOpen(false); askPublish(v); }}
+        onEditFrom={v => { loadVersion(v); setHistOpen(false); antMsg.info(`已载入 v${v} 到编辑器，改完保存即生成新版本`); }} />}
     </div>
   );
 }
@@ -734,6 +1006,103 @@ export function VersionDiff({ agent, onBack }) {
   );
 }
 export const diffChip = (bg, color) => ({ background: bg, color, fontSize: 12.5, padding: '2px 10px', borderRadius: 6, fontWeight: 600 });
+
+/* ================= 版本历史抽屉（列表 + 只读明细 + 对比 + 发布某版本） ================= */
+export function VersionHistory({ open, agentName, versions, headVer, liveVer, onClose, onPublish, onEditFrom }) {
+  const sorted = versions.slice().sort((a, b) => b.version - a.version);
+  const [tab, setTab] = useState('detail');
+  const [sel, setSel] = useState(headVer);
+  const [lv, setLv] = useState(versions.length >= 2 ? versions[versions.length - 2].version : headVer);
+  const [rv, setRv] = useState(headVer);
+  React.useEffect(() => { if (open) { setTab('detail'); setSel(headVer); setRv(headVer); setLv(versions.length >= 2 ? versions[versions.length - 2].version : headVer); } }, [open, headVer]);
+  const opts = sorted.map(v => ({ value: v.version, label: `v${v.version}${v.version === headVer ? ' · 最新' : ''}${v.version === liveVer ? ' · 线上' : ''} · ${(v.createdAt || '').slice(5)}` }));
+  const cfgOf = v => (versions.find(x => x.version === v) || {}).config || {};
+  const vc = cfgOf(sel), L = cfgOf(lv), R = cfgOf(rv);
+  const badges = v => <>{v === headVer && <span style={pill('#EEF0FF', '#4F46E5')}>最新</span>}{v === liveVer && <span style={pill('#E9F7EF', '#1E8449')}>已发布</span>}</>;
+
+  const ConfigDetail = () => {
+    const fk = Object.keys(vc.files || {});
+    return (
+      <>
+        <Descriptions column={2} size="small" colon={false} styles={{ label: { color: '#8A8C99', fontSize: 13, width: 56 }, content: { fontSize: 13.5 } }}
+          items={[
+            { label: '描述', span: 2, children: vc.desc || '—' },
+            { label: '模型', children: <Text code>{vc.model}</Text> },
+            { label: '参数', children: `温度 ${vc.params ? vc.params.temperature : '—'} · MaxTokens ${vc.params ? vc.params.max_tokens : '—'}` },
+            { label: '工具', span: 2, children: (vc.tools && vc.tools.length) ? vc.tools.map(id => <Tag key={id} bordered={false} style={{ background: '#EEF0FF', color: ACCENT }}>{nameOf(TOOLS, id)}</Tag>) : '—' },
+            { label: '技能', span: 2, children: (vc.skills && vc.skills.length) ? vc.skills.map(id => <Tag key={id} bordered={false} style={{ background: '#F1F1F4', color: '#4A4A55' }}>{nameOf(SKILLS, id)}</Tag>) : '—' },
+          ]} />
+        <Divider style={{ margin: '14px 0 12px' }} />
+        <Text style={{ fontSize: 13, fontWeight: 650 }}>指令文件 · v{sel}</Text>
+        <div style={{ marginTop: 10 }}>
+          <Collapse activeKey={fk} items={fk.map(k => ({ key: k, label: k, children: <pre style={{ background: '#FAFAFC', border: '1px solid #F1F1F5', color: '#33333C', padding: 14, borderRadius: 8, fontSize: 12.5, lineHeight: 1.6, overflow: 'auto', fontFamily: 'ui-monospace,Menlo,monospace', margin: 0 }}>{vc.files[k]}</pre> }))} />
+        </div>
+      </>
+    );
+  };
+
+  const DiffBody = () => {
+    if (lv === rv) return <div style={{ background: '#FFF8E6', border: '1px solid #FCE2A0', borderRadius: 8, padding: '10px 14px', color: '#946C00' }}>选择两个不同版本进行对比。</div>;
+    const rows = []; const cmp = (label, a, b) => { if (String(a) !== String(b)) rows.push({ label, from: a, to: b }); };
+    cmp('框架', fwName(L.framework), fwName(R.framework)); cmp('模型', L.model, R.model); cmp('描述', L.desc || '—', R.desc || '—');
+    cmp('Temperature', L.params && L.params.temperature, R.params && R.params.temperature); cmp('Max Tokens', L.params && L.params.max_tokens, R.params && R.params.max_tokens);
+    const tA = (R.tools || []).filter(x => !(L.tools || []).includes(x)), tD = (L.tools || []).filter(x => !(R.tools || []).includes(x));
+    const sA = (R.skills || []).filter(x => !(L.skills || []).includes(x)), sD = (L.skills || []).filter(x => !(R.skills || []).includes(x));
+    const fk = Array.from(new Set([...Object.keys(L.files || {}), ...Object.keys(R.files || {})]));
+    return (
+      <div>
+        <div style={{ background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, padding: 16, marginBottom: 14 }}>
+          <Text style={{ fontSize: 13, fontWeight: 650 }}>字段变化（v{lv} → v{rv}）</Text>
+          <div style={{ marginTop: 10 }}>
+            {rows.length === 0 && !tA.length && !tD.length && !sA.length && !sD.length ? <Text style={{ color: '#8A8C99' }}>无字段差异</Text> : <>
+              {rows.map(r => <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', fontSize: 13.5 }}><span style={{ width: 100, color: '#5A5C6B' }}>{r.label}</span><span style={diffChip('#FDECEC', '#C0392B')}>{String(r.from)}</span><span style={{ color: '#C4C4CE' }}>→</span><span style={diffChip('#E9F7EF', '#1E8449')}>{String(r.to)}</span></div>)}
+              {(tA.length || tD.length) ? <div style={{ display: 'flex', gap: 10, padding: '6px 0' }}><span style={{ width: 100, color: '#5A5C6B' }}>工具</span><div>{tD.map(id => <Tag key={id} bordered={false} style={{ background: '#FDECEC', color: '#C0392B' }}>− {nameOf(TOOLS, id)}</Tag>)}{tA.map(id => <Tag key={id} bordered={false} style={{ background: '#E9F7EF', color: '#1E8449' }}>+ {nameOf(TOOLS, id)}</Tag>)}</div></div> : null}
+              {(sA.length || sD.length) ? <div style={{ display: 'flex', gap: 10, padding: '6px 0' }}><span style={{ width: 100, color: '#5A5C6B' }}>技能</span><div>{sD.map(id => <Tag key={id} bordered={false} style={{ background: '#FDECEC', color: '#C0392B' }}>− {nameOf(SKILLS, id)}</Tag>)}{sA.map(id => <Tag key={id} bordered={false} style={{ background: '#E9F7EF', color: '#1E8449' }}>+ {nameOf(SKILLS, id)}</Tag>)}</div></div> : null}
+            </>}
+          </div>
+        </div>
+        {fk.map(k => { const dr = lineDiff((L.files || {})[k], (R.files || {})[k]); const changed = dr.some(r => r.t !== 'eq'); return (
+          <div key={k} style={{ background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, marginBottom: 14, overflow: 'hidden' }}>
+            <div style={{ padding: '9px 14px', borderBottom: '1px solid #F1F1F5', display: 'flex', justifyContent: 'space-between' }}><Text style={{ fontWeight: 650, fontSize: 13 }}>{k}</Text>{!changed && <Text style={{ color: '#8A8C99', fontSize: 12 }}>无变化</Text>}</div>
+            <div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 12.5, lineHeight: 1.7 }}>{dr.map((r, i) => <div key={i} style={{ display: 'flex', padding: '0 12px', background: r.t === 'add' ? '#EAF8F0' : r.t === 'del' ? '#FDECEC' : '#fff', color: r.t === 'add' ? '#1E8449' : r.t === 'del' ? '#C0392B' : '#5A5A66' }}><span style={{ width: 16, color: '#A6A8B4' }}>{r.t === 'add' ? '+' : r.t === 'del' ? '−' : ''}</span><span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{r.l || ' '}</span></div>)}</div>
+          </div>
+        ); })}
+      </div>
+    );
+  };
+
+  return (
+    <Drawer title={`版本历史 · ${agentName}`} width={940} open={open} onClose={onClose} styles={{ body: { padding: 0 } }}>
+      <div style={{ display: 'flex', height: '100%' }}>
+        <div style={{ width: 230, borderRight: '1px solid #F1F1F5', overflow: 'auto', flexShrink: 0, padding: '8px 0' }}>
+          {sorted.map(v => { const on = tab === 'detail' && v.version === sel; return (
+            <div key={v.version} onClick={() => { setSel(v.version); setTab('detail'); }}
+              style={{ padding: '10px 16px', cursor: 'pointer', background: on ? '#F5F5FE' : 'transparent', borderLeft: '2px solid ' + (on ? ACCENT : 'transparent') }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ fontWeight: 650, fontSize: 13.5 }}>v{v.version}</span>{badges(v.version)}</div>
+              <div style={{ fontSize: 11.5, color: '#A6A8B4', marginTop: 2 }}>{(v.createdAt || '').slice(5) || '—'}</div>
+            </div>
+          ); })}
+        </div>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <div style={{ padding: '12px 18px', borderBottom: '1px solid #F1F1F5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <Segmented value={tab} onChange={setTab} options={[{ value: 'detail', label: '版本明细' }, { value: 'diff', label: '版本对比' }]} />
+            {tab === 'detail'
+              ? <Space size={8}>
+                  <Button onClick={() => onEditFrom(sel)}>以此为基础编辑</Button>
+                  <Tooltip title={sel === liveVer ? '该版本已是线上发布版本' : '把此版本设为线上发布版本'}>
+                    <Button type="primary" disabled={sel === liveVer} onClick={() => onPublish(sel)}>{sel === liveVer ? '当前已发布' : `发布 v${sel}`}</Button>
+                  </Tooltip>
+                </Space>
+              : <Space size={6}><Select size="small" value={lv} style={{ width: 168 }} options={opts} onChange={setLv} /><span style={{ color: '#8A8C99' }}>→</span><Select size="small" value={rv} style={{ width: 168 }} options={opts} onChange={setRv} /></Space>}
+          </div>
+          <div style={{ flex: 1, overflow: 'auto', padding: 18 }}>
+            {tab === 'detail' ? <ConfigDetail /> : <DiffBody />}
+          </div>
+        </div>
+      </div>
+    </Drawer>
+  );
+}
 
 /* ================= 成员管理 (Spec J/K/H) ================= */
 export function MembersPanel({ ws, onUpdate }) {
