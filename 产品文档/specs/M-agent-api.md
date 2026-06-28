@@ -113,11 +113,36 @@ Session      有状态实例 = (Agent + Environment),服务端持有历史,按 i
 
 **约定**：`session_id` 单一语义 = 平台会话 id;续接 token 内部;错误用 HTTP 状态码 + `{detail}` 或 SSE `error` 事件。
 
+## 逐接口对齐对照（vs Claude Managed Agents）
+
+> 与 [Claude Managed Agents](https://platform.claude.com/docs/en/managed-agents/sessions) 的 Session API **逐端点**对照，标注差异与归属阶段。完整请求/响应 schema 见 ../../技术文档/接口契约.md。
+> **前提（重要）**：本平台 **L1/L2/L3 是隔离级别（Environment 的属性），不是三套接口**——三者**共用同一套** Session API，隔离与寻址正交（见 架构设计.md §10.5）。对照 Claude，L1/L2/L3 的差异只体现在「创建 session 绑哪个 environment」这一入参上。
+
+| # | Claude 接口 | 本项目 | 差异 / 缺口 | 阶段 |
+|---|---|---|---|---|
+| ① | `POST /v1/sessions`：`agent`(str/`{type,id,version}`)、`environment_id`**必填**、`vault_ids?` | `POST /api/sessions {agent, environment_id?, title?, version?}` | `environment_id` 我方**可选/预留**（真隔离仍在发布时定）；**无 `vault_ids`**；多 `title`；版本钉选✅已加 | P2/P4 |
+| ② | 生命周期**两步**：create 只开沙箱 → 发 event 才开工 | create 即建库记录，**send=execute 同步耦合** | 缺「先 provision 后驱动」的解耦（聊天够用，长 headless 任务才需） | P3 |
+| ③ | `POST /v1/sessions/{id}/events`：`user.message`/`user.interrupt`/`user.tool_confirmation`/`user.custom_tool_result`/`user.define_outcome` | `POST /api/sessions/{id}/events[/stream]`，兼容标准体+简写 `{message}` | 路径与标准事件体✅；**只认 `user.message`**，缺 `interrupt`/`tool_confirmation` 等富事件 | P3 |
+| ④ | `system.message` 会话间改 system prompt | 无 | 缺 | P3 |
+| ⑤ | **独立流端点** `GET /v1/sessions/{id}/events/stream`（先开流再发，防竞态） | `POST .../events/stream`（**发送即流**，绑在发送请求上） | 缺开流/发送解耦 → **无法独立重连续听**；多消费者不支持 | P3 |
+| ⑥ | 流事件富集：`agent.message/thinking/tool_use/mcp_tool_use`+`session.status_*`+`span.*`（含 `model_usage`） | `delta`/`done`/`error` 三种文本事件 | 无 thinking/tool_use/状态/token 用量等可观测事件 | P3 |
+| ⑦ | `GET /v1/sessions/{id}/events`：**追加式事件日志**，每事件带 `id`/`processed_at`，可重连去重 | 无此端点；历史是 `GET /api/sessions/{id}` 的 `messages:[{role,text}]` 数组 | **根本差异**：事件日志(可 replay) vs 消息数组 | P3 |
+| ⑧ | `GET /v1/sessions/{id}`：含 `status`(idle/running/rescheduling/terminated)+`stop_reason`(end_turn/requires_action) | `GET /api/sessions/{id}`（status 为自定义值） | **无四态状态机、无 `stop_reason`** | P4 |
+| ⑨ | `GET /v1/sessions?agent_id=`，游标分页 | `GET /api/sessions?agent=&scope=` | 基本对齐；多 `scope`，**无游标分页** | — |
+| ⑩ | `POST /v1/sessions/{id}`：**会话内热更** `agent.tools`/`agent.mcp_servers`（需 idle，session-local，全量替换） | `PUT /api/sessions/{id}` **仅改 title** | 缺 session-local 配置覆盖 | P4 |
+| ⑪ | `POST /v1/sessions/{id}/archive`（封存历史、禁再发事件） | 无 | 缺 archive | P4 |
+| ⑫ | `DELETE /v1/sessions/{id}`（删记录+事件+沙箱，running 需先 interrupt） | `DELETE /api/sessions/{id}` 硬删行 | 行为近似；无「running 保护」、无沙箱回收 | — |
+| ⑬ | **Environment** 一等资源（create session 时绑） | 无 `/api/environments`，isolation 挂发布记录 | **最大结构缺口**：env 未一等化 | P2 |
+| ⑭ | **Vault**（MCP OAuth 凭证托管，平台代刷 token） | 无 | 完全缺 | P4 |
+| ⑮ | **Agent** 独立版本化资源、session 引用 | `GET/POST/PUT/DELETE /api/agents`，已版本化、可钉 version | ✅ 概念对齐 | ✅ |
+
+**总账**：外形契约（三资源、统一 session、版本钉选、标准事件体、隔离正交）已对齐到 Phase 1；差距全在「**事件驱动的深度**」——Claude 是「事件日志 + 状态机 + 富事件 + 两步生命周期」的异步底座，本项目目前是「同步 invoke + 消息数组」的聊天底座。对应下方 Phase 2/3/4。
+
 ## 对齐路线（分阶段，旧端点留适配器）
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | Phase 1 | 统一 Session（服务端历史、单一 session_id、覆盖全部 agent、事件体兼容） | ✅已落地 |
-| Phase 2 | Environment 一等资源（`/api/environments`,Session 绑定） | ⬜ |
-| Phase 3 | 事件状态机（`message.delta`/`status`/`tool.use`/`tool.confirm`/异步任务事件） | ⬜ |
-| Phase 4 | session 状态机 / archive / vaults(MCP 凭证) / session 创建钉 agent 版本 | ⬜ |
+| Phase 2 | Environment 一等资源（`/api/environments`,Session 绑定；对照 ⑬①） | ⬜ |
+| Phase 3 | 事件状态机（独立流端点、事件日志、`interrupt`/`tool_confirmation`/`tool.use`/异步任务事件；对照 ②③④⑤⑥⑦） | ⬜ |
+| Phase 4 | session 状态机+`stop_reason` / archive / vaults(MCP 凭证) / session 创建钉 agent 版本 / 会话内热更（对照 ⑧⑩⑪⑭） | ⬜ |
