@@ -1,0 +1,16 @@
+# 依赖与缓存
+node_modules/
+**/node_modules/
+.vite/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+
+# 数据库与备份
+*.db
+*.db.bak-*
+
+# 系统
+.DS_Store
