@@ -645,7 +645,7 @@ export function AgentDetail({ agent, service, onServiceChanged, onBack, onEdit, 
 }
 
 /* ================= 工作台（方案A：创作+查看+运维+试跑 合一） ================= */
-export function AgentWorkbench({ mode, agent: agentProp, service, wsId, onBack, onCreate, onSaveStay, onChanged, onDiff }) {
+export function AgentWorkbench({ mode, agent: agentProp, services, wsId, onBack, onCreate, onSaveStay, onChanged, onDiff }) {
   const [savedAgent, setSavedAgent] = useState(agentProp || null); // 已保存的完整 agent（含 versions）
   const isCreate = !savedAgent;
   const ws = wsId || (agentProp && agentProp.wsId);
@@ -678,6 +678,8 @@ export function AgentWorkbench({ mode, agent: agentProp, service, wsId, onBack, 
   const refetch = () => { if (savedAgent && API_ON) apiCall(`/api/agents/${savedAgent.id}`).then(full => setSavedAgent(s => ({ ...s, ...full }))).catch(() => {}); };
 
   // —— 运行态机 ——
+  // 按当前 savedAgent.id 实时解析运行服务：创建页发布后也能立刻显示「运行中」（修复创建页 service 被写死为 null 的 bug）
+  const service = (savedAgent && services) ? (services.find(s => s.agentId === savedAgent.id) || null) : null;
   const deploying = service && service.status === 'deploying';
   const failed = service && service.status === 'failed';
   const running = service && !deploying && !failed;
@@ -764,22 +766,18 @@ export function AgentWorkbench({ mode, agent: agentProp, service, wsId, onBack, 
       <div className="agent-workbench-body" style={{ flex: 1, display: 'flex', gap: 14, minHeight: 0 }}>
         {/* 中：配置 */}
         <div className="agent-config-scroll" style={{ flex: 1, overflow: 'auto', minWidth: 0, paddingRight: 2 }}>
-          {/* 元信息条 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14, flexWrap: 'wrap' }}>
-            <Input variant="borderless" value={desc} placeholder="添加描述…" onChange={e => setDesc(e.target.value)} style={{ fontSize: 13, padding: 0, color: '#8A8C99', width: 260 }} />
-            <div style={{ flex: 1 }} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12.5, color: '#8A8C99' }}>框架</span>
-              <Segmented size="small" value={framework} onChange={pickFramework} disabled={!isCreate}
-                options={FRAMEWORKS.map(f => ({ value: f.key, disabled: !f.enabled, label: <Tooltip title={f.enabled ? '' : (f.tip || '未开放')}><span>{f.name}</span></Tooltip> }))} />
+          {/* 元信息条：描述 + 框架/模型/参数 同一行；控件自带含义，去掉冗余文字标签以容纳一行；窄屏时整组控件换行而不拆分 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14, flexWrap: 'wrap' }}>
+            <Input variant="borderless" value={desc} placeholder="添加描述…" onChange={e => setDesc(e.target.value)} style={{ fontSize: 13, padding: 0, color: '#8A8C99', flex: '1 1 160px', minWidth: 130 }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, flexWrap: 'wrap' }}>
+              {/* 框架只在创建时可选；打开已有 agent 时框架只读，顶栏已有框架标记，这里不再重复占位 */}
+              {isCreate && <Segmented size="small" value={framework} onChange={pickFramework}
+                options={FRAMEWORKS.map(f => ({ value: f.key, disabled: !f.enabled, label: <Tooltip title={f.enabled ? '' : (f.tip || '未开放')}><span>{f.name}</span></Tooltip> }))} />}
+              <Select value={model} placeholder="选择模型 *" style={{ width: 170 }} options={PROVIDERS} onChange={setModel} showSearch optionFilterProp="label" status={!model ? 'warning' : ''} />
+              <Popover trigger="click" placement="bottomRight" title="模型参数" content={paramsContent}>
+                <Button icon={<SettingOutlined />} disabled={!model}>参数</Button>
+              </Popover>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 12.5, color: '#8A8C99' }}>模型</span>
-              <Select value={model} placeholder="选择模型 *" style={{ width: 180 }} options={PROVIDERS} onChange={setModel} showSearch optionFilterProp="label" status={!model ? 'warning' : ''} />
-            </div>
-            <Popover trigger="click" placement="bottomRight" title="模型参数" content={paramsContent}>
-              <Button icon={<SettingOutlined />} disabled={!model}>参数</Button>
-            </Popover>
           </div>
 
           <div className="agent-panel agent-panel--pad" style={{ background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, padding: 16, marginBottom: 14 }}>

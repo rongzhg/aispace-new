@@ -1,7 +1,7 @@
 ---
 name: Agent 生命周期管理
 last amended: 2026-06-28
-version: 3
+version: 4
 description: Agent Operations 列表、Agent 工作台、创建、编辑、删除等全生命周期操作
 ---
 
@@ -17,7 +17,7 @@ description: Agent Operations 列表、Agent 工作台、创建、编辑、删�
 
 #### Acceptance Criteria
 1. WHEN 用户进入 Agent 页 THEN 系统 SHALL 展示当前空间的 **Agent Operations** 列表，默认按「最近编辑」倒序
-2. WHERE 列表顶部 系统 SHALL 展示 4 个运营指标：ALL AGENTS、PUBLISHED LIVE、RUNNING LIVE、ATTENTION；不得用「Needs publish」等替用户做发布判断的指标
+2. WHERE 列表 系统 SHALL NOT 展示顶部聚合 KPI 概览条（原 ALL AGENTS、PUBLISHED LIVE、RUNNING LIVE、ATTENTION 四指标已移除）；运营判断改由每行的 Live 状态与 Draft 状态承载，避免顶部聚合指标替用户做发布判断
 3. WHERE 每行 Agent 系统 SHALL 展示：名称、描述、Agent id、框架、最近更新时间、创建人/负责人、Live 状态、Draft 状态、操作入口
 4. WHERE Agent 行 系统 SHALL **不展示大模型字段**；模型属于配置详情，不是列表页主决策信息
 5. WHERE Live 状态 系统 SHALL 展示该 Agent 是否未发布、运行中、已停止、部署中或失败，并在二级信息中展示 Live 版本与部署方式（如 共享(L1)、独立(L2)）
@@ -32,7 +32,7 @@ description: Agent Operations 列表、Agent 工作台、创建、编辑、删�
 
 #### 引用 / 影响
 - 术语：Agent, Framework, HeadVersion, LiveVersion, DraftStatus, Workspace, Creator, DeploymentMode
-- 组件：Table、KPI、Input.Search、Select(创建人/Live 状态/排序)、Empty、Popconfirm
+- 组件：Table、Input.Search、Select(创建人/Live 状态/排序)、Empty、Popconfirm
 - 现有功能：作用域为当前空间(见 Spec K)；Live/运行态/部署方式见 Spec I；版本关系见 Spec F
 - 设计决策：列表页只回答“谁负责、线上是否可用、发布方式是什么、草稿与线上是否一致、是否有异常”；配置细节（模型、参数、工具/技能）放进工作台
 

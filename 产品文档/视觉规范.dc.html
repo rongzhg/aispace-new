@@ -334,12 +334,6 @@
               <div><div class="page-title">Agent Operations</div><div class="page-sub">围绕负责人、Live 版本、发布方式和草稿状态做运营判断。</div></div>
               <span class="btn btn-primary">创建 Agent</span>
             </div>
-            <div class="kpi-grid">
-              <div class="kpi"><div class="kpi-label">All agents</div><div class="kpi-value">12</div><div class="kpi-meta">3 个仅草稿</div></div>
-              <div class="kpi"><div class="kpi-label">Published live</div><div class="kpi-value">8</div><div class="kpi-meta">已有线上版本</div></div>
-              <div class="kpi"><div class="kpi-label">Running live</div><div class="kpi-value">6</div><div class="kpi-meta">当前可被调用</div></div>
-              <div class="kpi"><div class="kpi-label">Attention</div><div class="kpi-value">2</div><div class="kpi-meta">部署中 1 · 失败 1</div></div>
-            </div>
           </div>
         </div>
       </div>
@@ -508,7 +502,7 @@
         <div class="card-title">列表交互规则</div>
         <ul class="spec-list">
           <li>只有“管理”进入工作台，不使用整行点击。</li>
-          <li>KPI 只表达事实：ALL、PUBLISHED、RUNNING、ATTENTION。</li>
+          <li>不设顶部聚合 KPI 概览条；运营判断由每行的 Live 状态与 Draft 状态承载。</li>
           <li>不要出现 Needs publish、Change 这类替用户判断或有歧义的字段。</li>
           <li>搜索覆盖名称和描述；筛选覆盖 Owner、Live、Draft。</li>
           <li>默认按 updatedAt 倒序。</li>

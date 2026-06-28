@@ -93,15 +93,8 @@ function Root() {
     return list.slice().sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name) : b.updatedAt.localeCompare(a.updatedAt));
   }, [agents, curWs, search, sort, ownerFilter, runtimeFilter, services]);
 
-  const agentStats = useMemo(() => {
-    const list = agents.filter(a => a.wsId === curWs && !a.deleted);
-    const published = list.filter(a => a.published).length;
-    const running = list.filter(a => runtimeMeta(a).key === 'running').length;
-    const deploying = list.filter(a => runtimeMeta(a).key === 'deploying').length;
-    const failed = list.filter(a => runtimeMeta(a).key === 'failed').length;
-    const draftOnly = list.filter(a => draftMeta(a).key === 'draft_only').length;
-    return { total: list.length, published, running, deploying, failed, draftOnly, issues: deploying + failed };
-  }, [agents, curWs, services]);
+  // 列表「显示 N / total」用的总数（KPI 概览已移除，仅保留这个计数）
+  const agentTotal = useMemo(() => agents.filter(a => a.wsId === curWs && !a.deleted).length, [agents, curWs]);
 
   const switchWs = id => { setCurWs(id); setView({ name: 'list' }); setNav('agent'); setSearch(''); setOwnerFilter('all'); setRuntimeFilter('all'); if (API_ON) loadAgents(id); };
   // stay=true：创建后停留在 Builder（用于「创建并发布」），返回新建 agent；否则回列表
@@ -281,13 +274,6 @@ function Root() {
                 </Space>
               </div>
 
-              <div className="agent-kpi-grid">
-                <div className="agent-kpi"><div className="agent-kpi__label">ALL AGENTS</div><div className="agent-kpi__value">{agentStats.total}</div><div className="agent-kpi__meta">{agentStats.draftOnly} 个仅草稿</div></div>
-                <div className="agent-kpi"><div className="agent-kpi__label">PUBLISHED LIVE</div><div className="agent-kpi__value">{agentStats.published}</div><div className="agent-kpi__meta">已有线上版本</div></div>
-                <div className="agent-kpi"><div className="agent-kpi__label">RUNNING LIVE</div><div className="agent-kpi__value">{agentStats.running}</div><div className="agent-kpi__meta">当前可被调用</div></div>
-                <div className="agent-kpi"><div className="agent-kpi__label">ATTENTION</div><div className="agent-kpi__value">{agentStats.issues}</div><div className="agent-kpi__meta">部署中 {agentStats.deploying} · 失败 {agentStats.failed}</div></div>
-              </div>
-
               <div className="agent-toolbar">
                 <Input allowClear size="small" prefix={<SearchOutlined style={{ color: '#94A3B8' }} />} placeholder="按名称或描述搜索" value={search} onChange={e => setSearch(e.target.value)} style={{ width: 220 }} />
                 <Select size="small" value={ownerFilter} style={{ width: 120 }} onChange={setOwnerFilter} options={ownerOptions} />
@@ -303,7 +289,7 @@ function Root() {
                   ]} />
                 <Select size="small" value={sort} style={{ width: 112 }} onChange={setSort} options={[{ value: 'updated', label: '最近编辑' }, { value: 'name', label: '名称 A-Z' }]} />
                 <div style={{ flex: 1 }} />
-                <Text style={{ color: '#64748B', fontSize: 12 }}>显示 {visibleAgents.length} / {agentStats.total}</Text>
+                <Text style={{ color: '#64748B', fontSize: 12 }}>显示 {visibleAgents.length} / {agentTotal}</Text>
               </div>
 
               <div className="agent-table-shell">
@@ -312,12 +298,12 @@ function Root() {
               </div>
             </div>
           )}
-          {nav === 'agent' && view.name === 'create' && <AgentWorkbench mode="create" wsId={curWs} service={null} onBack={() => setView({ name: 'list' })} onCreate={data => saveNew(data, true)} onChanged={() => { if (API_ON) { loadAgents(curWs); loadServices(); } }} onDiff={a => setView({ name: 'diff', agent: a })} />}
+          {nav === 'agent' && view.name === 'create' && <AgentWorkbench mode="create" wsId={curWs} services={services} onBack={() => setView({ name: 'list' })} onCreate={data => saveNew(data, true)} onSaveStay={(a, data) => saveEdit(a, data, true)} onChanged={() => { if (API_ON) { loadAgents(curWs); loadServices(); } }} onDiff={a => setView({ name: 'diff', agent: a })} />}
           {nav === 'agent' && (view.name === 'detail' || view.name === 'edit') && (() => {
             // 列表项有最新 published/状态字段但无 versions；打开详情时抓取的 view.agent 带 versions。合并：列表字段覆盖 + 保留 versions
             const listA = agents.find(a => a.id === view.agent.id);
             const full = listA ? { ...view.agent, ...listA, versions: view.agent.versions || listA.versions } : view.agent;
-            return <AgentWorkbench mode="open" agent={full} service={svcMap[view.agent.id] || null} wsId={curWs} onBack={() => setView({ name: 'list' })} onSaveStay={(a, data) => saveEdit(a, data, true)} onChanged={() => { if (API_ON) { loadAgents(curWs); loadServices(); } }} onDiff={a => setView({ name: 'diff', agent: a })} />;
+            return <AgentWorkbench mode="open" agent={full} services={services} wsId={curWs} onBack={() => setView({ name: 'list' })} onSaveStay={(a, data) => saveEdit(a, data, true)} onChanged={() => { if (API_ON) { loadAgents(curWs); loadServices(); } }} onDiff={a => setView({ name: 'diff', agent: a })} />;
           })()}
           {nav === 'agent' && view.name === 'diff' && <VersionDiff agent={agents.find(a => a.id === view.agent.id) || view.agent} onBack={() => setView({ name: 'detail', agent: view.agent })} />}
           {nav === 'chat' && <ChatPanel curWs={curWs} isAdmin={isPlatformAdmin} onChanged={() => { if (API_ON) { loadWorkspaces(); loadAgents(curWs); } }} />}
