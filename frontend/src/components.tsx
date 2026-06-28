@@ -1622,7 +1622,7 @@ function MarketCard({ title, badge, sub, desc, meta, info, installed, onAdd, onR
   // 删除/移出按钮：有「详情」主操作时退化为小图标（危险色），避免铺满整行喧宾夺主
   const compactRemove = installed && onView;
   let removeEl;
-  if (installed) {
+  if (installed && onRemove) {
     const iconBtn = <Tooltip title={removeLabel || '移出本空间'}><Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={removeConfirm ? undefined : onRemove} /></Tooltip>;
     const fullBtn = <Button size="small" danger ghost onClick={removeConfirm ? undefined : onRemove} style={{ flex: 1 }}>{removeLabel || '移出本空间'}</Button>;
     const el = compactRemove ? iconBtn : fullBtn;
@@ -1631,17 +1631,17 @@ function MarketCard({ title, badge, sub, desc, meta, info, installed, onAdd, onR
       : el;
   }
   return (
-    <div style={{ border: '1px solid #EBEBF1', borderRadius: 8, padding: 16, background: '#fff', display: 'flex', flexDirection: 'column', gap: 8, minHeight: 140 }}>
+    <div style={{ border: '1px solid #E2E8F0', borderRadius: 6, padding: 14, background: '#fff', display: 'flex', flexDirection: 'column', gap: 8, minHeight: 140 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 650, fontSize: 14, color: '#17171C', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
-          {sub && <div style={{ fontSize: 11.5, color: '#A6A8B4', fontFamily: 'ui-monospace,Menlo,monospace', marginTop: 1 }}>{sub}</div>}
+          <div style={{ fontWeight: 700, fontSize: 13.5, color: '#0F172A', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
+          {sub && <div style={{ fontSize: 11.5, color: '#94A3B8', fontFamily: 'ui-monospace,Menlo,monospace', marginTop: 1 }}>{sub}</div>}
         </div>
         {badge}
       </div>
-      <div style={{ fontSize: 12.5, color: '#5A5C6B', lineHeight: 1.5, flex: 1, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{desc || '—'}</div>
+      <div style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.55, flex: 1, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{desc || '—'}</div>
       {meta}
-      {info && <div style={{ fontSize: 11.5, color: '#A6A8B4', display: 'flex', alignItems: 'center', gap: 6 }}>{info}</div>}
+      {info && <div style={{ fontSize: 11.5, color: '#94A3B8', display: 'flex', alignItems: 'center', gap: 6 }}>{info}</div>}
       <div style={{ display: 'flex', gap: 8, marginTop: 2, alignItems: 'center' }}>
         {installed
           ? (actionEl
@@ -1719,34 +1719,34 @@ function SkillTreePage({ skill, wsId, onBack }) {
   };
   return (
     <div>
-      <Button type="text" icon={<ArrowLeftOutlined />} onClick={onBack} style={{ paddingLeft: 0, marginBottom: 12, color: '#5A5C6B' }}>返回技能市场</Button>
+      <Button type="text" icon={<ArrowLeftOutlined />} onClick={onBack} style={{ paddingLeft: 0, marginBottom: 12, color: '#475569' }}>返回技能列表</Button>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-        <div style={{ width: 34, height: 34, borderRadius: 8, background: '#EEF0FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: ACCENT, fontSize: 17 }}><BulbOutlined /></div>
+        <div style={{ width: 34, height: 34, borderRadius: 6, background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: ACCENT, fontSize: 17 }}><BulbOutlined /></div>
         <div>
-          <div style={{ fontSize: 17, fontWeight: 700, color: '#17171C' }}>{skill.name}
-            <Tag bordered={false} style={{ marginLeft: 8, fontSize: 11 }}>{skill.source === 'upload' ? '上传包' : skill.source === 'custom' ? '自定义' : skill.source}</Tag></div>
-          <div style={{ fontSize: 12.5, color: '#8A8C99', fontFamily: 'ui-monospace,Menlo,monospace' }}>{skill.id}</div>
+          <div style={{ fontSize: 18, fontWeight: 760, color: '#0F172A', letterSpacing: -0.2 }}>{skill.name}
+            <Tag bordered={false} style={{ marginLeft: 8, fontSize: 11, background: '#F1F5F9', color: '#475569' }}>{skill.source === 'upload' ? '上传包' : skill.source === 'custom' ? '自定义' : skill.source}</Tag></div>
+          <div style={{ fontSize: 12, color: '#94A3B8', fontFamily: 'ui-monospace,Menlo,monospace' }}>{skill.id}</div>
         </div>
       </div>
-      <div style={{ fontSize: 13, color: '#5A5C6B', lineHeight: 1.6, margin: '10px 0 18px', maxWidth: 760 }}>{skill.description}</div>
+      <div style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.65, margin: '10px 0 18px', maxWidth: 760 }}>{skill.description}</div>
 
-      <div style={{ fontSize: 12, fontWeight: 650, color: '#33333C', marginBottom: 10 }}>技能文件</div>
+      <div style={{ fontSize: 12.5, fontWeight: 760, color: '#0F172A', marginBottom: 10 }}>技能文件</div>
       {treeData.length > 0 ? (
-        <div style={{ display: 'flex', gap: 14, height: 'calc(100vh - 320px)', minHeight: 340 }}>
-          <div style={{ width: 300, border: '1px solid #EBEBF1', borderRadius: 8, padding: 8, overflow: 'auto', background: '#FAFAFB' }}>
+        <div style={{ display: 'flex', gap: 12, height: 'calc(100vh - 320px)', minHeight: 340 }}>
+          <div style={{ width: 300, border: '1px solid #DFE3EA', borderRadius: 6, padding: 8, overflow: 'auto', background: '#F8FAFC' }}>
             <Tree.DirectoryTree treeData={treeData} showIcon defaultExpandAll selectedKeys={sel ? [sel] : []}
               onSelect={(keys, { node }) => { if (node.isLeaf) openFile(node.key); }} />
           </div>
-          <div style={{ flex: 1, minWidth: 0, border: '1px solid #EBEBF1', borderRadius: 8, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontSize: 11.5, color: '#8A8C99', padding: '8px 12px', borderBottom: '1px solid #F1F1F5', fontFamily: 'ui-monospace,Menlo,monospace' }}>{sel || '← 点击左侧文件查看内容'}</div>
+          <div style={{ flex: 1, minWidth: 0, border: '1px solid #DFE3EA', borderRadius: 6, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontSize: 11.5, color: '#94A3B8', padding: '8px 12px', borderBottom: '1px solid #EDF0F4', background: '#F8FAFC', fontFamily: 'ui-monospace,Menlo,monospace' }}>{sel || '← 点击左侧文件查看内容'}</div>
             {loading ? <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
-              : <pre style={{ margin: 0, padding: 14, fontSize: 12.5, lineHeight: 1.6, color: '#33333C', background: '#FAFAFC', whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflow: 'auto', flex: 1, fontFamily: 'ui-monospace, Menlo, monospace' }}>{content}</pre>}
+              : <pre style={{ margin: 0, padding: 14, fontSize: 12.5, lineHeight: 1.6, color: '#334155', background: '#fff', whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflow: 'auto', flex: 1, fontFamily: 'ui-monospace, Menlo, monospace' }}>{content}</pre>}
           </div>
         </div>
       ) : (
         <div>
-          <div style={{ fontSize: 12, color: '#A6A8B4', marginBottom: 8 }}>该技能无上传包文件，展示其 SKILL.md：</div>
-          <pre style={{ margin: 0, background: '#FAFAFC', border: '1px solid #F1F1F5', color: '#33333C', borderRadius: 8, padding: 14, fontSize: 12.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 'calc(100vh - 360px)', overflow: 'auto', fontFamily: 'ui-monospace, Menlo, monospace' }}>{skill.skill_md}</pre>
+          <div style={{ fontSize: 12, color: '#94A3B8', marginBottom: 8 }}>该技能无上传包文件，展示其 SKILL.md：</div>
+          <pre style={{ margin: 0, background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#334155', borderRadius: 6, padding: 14, fontSize: 12.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 'calc(100vh - 360px)', overflow: 'auto', fontFamily: 'ui-monospace, Menlo, monospace' }}>{skill.skill_md}</pre>
         </div>
       )}
     </div>
@@ -1854,7 +1854,6 @@ export function SkillMarket({ wsId, me }) {
   const loadInstalled = () => { setLoading(true); return apiCall('/api/skills?ws=' + wsId).then(rows => setInstalled(rows || [])).catch(() => {}).finally(() => setLoading(false)); };
   React.useEffect(() => { loadInstalled(); }, [wsId]);
   const remove = async (s) => { try { await apiCall(`/api/skills/${encodeURIComponent(s.id)}?ws=${wsId}`, { method: 'DELETE' }); antMsg.success('已删除技能'); loadInstalled(); } catch (e) { antMsg.error(e.message); } };
-  const toggleScope = async (s) => { try { await apiCall(`/api/scope/skill/${encodeURIComponent(s.id)}/${s.disabled ? 'enable' : 'disable'}?ws=${wsId}`, { method: 'POST' }); antMsg.success(s.disabled ? '已在本空间启用' : '已在本空间禁用'); loadInstalled(); } catch (e) { antMsg.error(e.message); } };
   const uploadProps = {
     name: 'file', accept: '.zip,.tar,.tar.gz,.tgz', showUploadList: false, multiple: false,
     customRequest: async ({ file, onSuccess, onError }) => {
@@ -1874,44 +1873,58 @@ export function SkillMarket({ wsId, me }) {
   // 详情：独立页面
   if (detail) return <SkillTreePage skill={detail} wsId={wsId} onBack={() => { setDetail(null); loadInstalled(); }} />;
 
+  const platCount = installed.filter(s => s.scope === 'platform').length;
+
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div style={{ fontSize: 12.5, color: '#8A8C99' }}>本空间可用技能（{installed.length}）· 含<span style={{ color: '#7C3AED' }}>平台全局</span>（所有空间共享）+ 本空间私有</div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setNewOpen(true)}>新建技能</Button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20, marginBottom: 14 }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#64748B' }}>Skill Library</div>
+          <div style={{ marginTop: 2, fontSize: 22, fontWeight: 760, lineHeight: 1.15, color: '#0F172A' }}>技能</div>
+          <div style={{ marginTop: 5, fontSize: 12.5, color: '#64748B' }}>本空间可用的 Agent Skill：打包上传含 <code>SKILL.md</code> 的目录，在创建 / 编辑 Agent 时绑定。</div>
+        </div>
+        <Space size={8}>
+          <Button icon={<ReloadOutlined />} onClick={() => { loadInstalled(); antMsg.success('已刷新'); }}>刷新</Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setNewOpen(true)}>新建技能</Button>
+        </Space>
+      </div>
+
+      <div style={{ display: 'flex', gap: 18, marginBottom: 14, fontSize: 12.5, color: '#475569' }}>
+        <span>可用技能 <b style={{ color: '#0F172A' }}>{installed.length}</b></span>
+        <span>平台全局 <b style={{ color: '#2563EB' }}>{platCount}</b><span style={{ color: '#94A3B8' }}>（所有空间共享）</span></span>
+        <span>本空间私有 <b style={{ color: '#0F172A' }}>{installed.length - platCount}</b></span>
       </div>
 
       {loading ? <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
         : installed.length === 0
-          ? <div style={{ border: '1px dashed #DEDEE3', borderRadius: 8, padding: '40px 0', background: '#FCFCFD' }}>
+          ? <div style={{ border: '1px dashed #DFE3EA', borderRadius: 6, padding: '40px 0', background: '#F8FAFC' }}>
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="本空间还没有技能">
                 <Button type="primary" icon={<PlusOutlined />} onClick={() => setNewOpen(true)}>新建技能</Button>
               </Empty>
             </div>
-          : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 14 }}>
+          : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 12 }}>
               {installed.map(s => { const isPlat = s.scope === 'platform'; return (
                 <MarketCard key={s.id} title={s.name} sub={s.id} desc={s.description} installed
                   removeLabel="删除" removeConfirm={isPlat ? undefined : `删除技能「${s.name}」？（软删除，可重新上传同名恢复）`}
-                  badge={isPlat ? <Tag bordered={false} color="purple" style={{ fontSize: 11 }}>{s.disabled ? '全局·已禁用' : '全局'}</Tag>
-                    : s.source === 'upload' ? <Tag bordered={false} style={{ fontSize: 11 }}>{(s.tree || []).filter(e => !e.dir).length} 文件</Tag>
-                    : <Tag bordered={false} style={{ fontSize: 11 }}>{s.source === 'custom' ? '自定义' : s.source}</Tag>}
+                  badge={isPlat ? <Tag bordered={false} style={{ fontSize: 11, background: '#EEF2FF', color: '#2563EB' }}>全局</Tag>
+                    : s.source === 'upload' ? <Tag bordered={false} style={{ fontSize: 11, background: '#F1F5F9', color: '#475569' }}>{(s.tree || []).filter(e => !e.dir).length} 文件</Tag>
+                    : <Tag bordered={false} style={{ fontSize: 11, background: '#F1F5F9', color: '#475569' }}>{s.source === 'custom' ? '自定义' : s.source}</Tag>}
                   info={<><UserOutlined style={{ fontSize: 11 }} /> {s.creator || '—'} · {s.added_at || '—'}</>}
                   onRemove={isPlat ? undefined : () => remove(s)}
-                  actionEl={isPlat ? <Button size="small" danger={!s.disabled} type={s.disabled ? 'primary' : 'default'} ghost={s.disabled} onClick={() => toggleScope(s)}>{s.disabled ? '在本空间启用' : '在本空间禁用'}</Button> : undefined}
                   onView={() => setDetail(s)}
                   meta={(s.allowed_tools || []).length ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {s.allowed_tools.map(t => <span key={t} style={pill('#F1F1F4', '#5A5C6B')}>{t}</span>)}</div> : null} />
+                    {s.allowed_tools.map(t => <span key={t} style={pill('#F1F5F9', '#475569')}>{t}</span>)}</div> : null} />
               ); })}
             </div>}
 
       <Modal open={newOpen} onCancel={() => setNewOpen(false)} footer={null} title="新建技能" width={560} destroyOnClose>
-        <div style={{ fontSize: 12.5, color: '#8A8C99', margin: '4px 0 16px', background: '#F7F8FA', borderRadius: 8, padding: '10px 12px' }}>
+        <div style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.6, margin: '4px 0 16px', background: '#F8FAFC', border: '1px solid #EDF0F4', borderRadius: 6, padding: '10px 12px' }}>
           技能 = 一个含 <code>SKILL.md</code> 的目录（Claude Agent Skill 规格）。把它打包成压缩包上传，系统会自动解析 <b>name</b> 与 <b>description</b>。
         </div>
         <Upload.Dragger {...uploadProps} disabled={uploading}>
           <p style={{ margin: '6px 0 10px' }}>{uploading ? <Spin /> : <InboxOutlined style={{ fontSize: 38, color: ACCENT }} />}</p>
-          <p style={{ fontSize: 14, fontWeight: 600, color: '#17171C', margin: 0 }}>点击或拖拽技能包到此处上传</p>
-          <p style={{ fontSize: 12.5, color: '#8A8C99', margin: '6px 0 0' }}>支持 .zip / .tar / .tar.gz；包内（根目录或子目录）需含 SKILL.md</p>
+          <p style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', margin: 0 }}>点击或拖拽技能包到此处上传</p>
+          <p style={{ fontSize: 12.5, color: '#94A3B8', margin: '6px 0 0' }}>支持 .zip / .tar / .tar.gz；包内（根目录或子目录）需含 SKILL.md</p>
         </Upload.Dragger>
       </Modal>
     </div>
