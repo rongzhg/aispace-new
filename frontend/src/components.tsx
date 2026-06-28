@@ -1677,4 +1677,163 @@ export function EnvPanel() {
   );
 }
 
+/* ================= 会话控制台（Spec N · 按创建人聚合我创建的 Agent 的全部会话） ================= */
+// 视觉规范：运行环境用中性药丸（与 DeployPanel 一致），隔离差异靠 L1/L2/L3 文本 + 分段过滤区分，不滥用语义色。
+const _MONO = { fontFamily: 'ui-monospace,Menlo,monospace' };
+const _envText = (iso, loc) => {
+  const where = loc === 'cloud' ? '云端' : '本地';
+  return iso ? `${isoName(iso)} · ${iso} · ${where}` : `通用 · ${where}`;
+};
+const _statusPill = (s) => s === 'active'
+  ? <span style={pill('#E9F7EF', '#1E8449')}>● 活跃</span>
+  : <span style={pill('#F1F1F4', '#A6A8B4')}>{s || '—'}</span>;
+const _srcText = (s) => s === 'gateway' ? '网关直连' : s === 'cloud-callback' ? '云端回传' : '平台界面';
+
+export function SessionConsole({ me }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [fAgent, setFAgent] = useState('');     // 所属 Agent 过滤
+  const [fIso, setFIso] = useState('');         // 运行环境过滤 L1/L2/L3
+  const [q, setQ] = useState('');               // 关键词（标题）
+  const [detail, setDetail] = useState(null);   // 打开的会话明细
+  const [dLoading, setDLoading] = useState(false);
+
+  const load = () => {
+    if (!API_ON) { setRows([]); return; }
+    setLoading(true);
+    apiCall('/api/sessions?scope=created&size=1000')
+      .then(d => setRows((d && d.items) || []))
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  };
+  React.useEffect(load, []);
+
+  const agentOptions = useMemo(() => {
+    const m = {};
+    rows.forEach(r => { if (!m[r.agent]) m[r.agent] = r.agentName || r.agent; });
+    return Object.entries(m).map(([value, label]) => ({ value, label }));
+  }, [rows]);
+
+  const filtered = useMemo(() => rows.filter(r =>
+    (!fAgent || r.agent === fAgent) &&
+    (!fIso || r.isolation === fIso) &&
+    (!q || (r.title || '').toLowerCase().includes(q.toLowerCase()))
+  ), [rows, fAgent, fIso, q]);
+
+  const openDetail = (id) => {
+    setDLoading(true); setDetail({ loading: true });
+    apiCall(`/api/sessions/${id}`).then(d => setDetail(d)).catch(() => setDetail(null)).finally(() => setDLoading(false));
+  };
+
+  const field = (label, val) => (
+    <div>
+      <div style={{ fontSize: 11, color: '#A6A8B4', fontWeight: 600, letterSpacing: 0.3, marginBottom: 5 }}>{label}</div>
+      <div style={{ fontSize: 13, color: '#2A2A33', lineHeight: 1.4 }}>{val}</div>
+    </div>
+  );
+
+  return (
+    <div>
+      <style>{`.sess-row{transition:border-color .12s ease,box-shadow .12s ease}.sess-row:hover{border-color:#C9CAD6 !important;box-shadow:0 1px 2px rgba(20,20,45,0.06)}`}</style>
+
+      {/* 页头 */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 20, fontWeight: 750, letterSpacing: -0.3, color: '#17171C' }}>会话</div>
+        <Text style={{ color: '#8A8C99', fontSize: 13.5 }}>我创建的 Agent（含 L1 共享 / L2 独立 / L3 即用即弃，及通用助手）曾经活跃过的全部会话 · 仅自己创建的可见</Text>
+      </div>
+
+      {/* 工具条 */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Input allowClear prefix={<SearchOutlined style={{ color: '#B6B6BE' }} />} placeholder="搜索会话标题" value={q} onChange={e => setQ(e.target.value)} style={{ width: 240 }} />
+        <Select allowClear placeholder="全部 Agent" style={{ width: 180 }} value={fAgent || undefined} onChange={v => setFAgent(v || '')} options={agentOptions} />
+        <Segmented value={fIso || 'ALL'} onChange={v => setFIso(v === 'ALL' ? '' : v)}
+          options={[{ label: '全部环境', value: 'ALL' }, { label: '共享 L1', value: 'L1' }, { label: '独立 L2', value: 'L2' }, { label: '即用即弃 L3', value: 'L3' }]} />
+        <div style={{ flex: 1 }} />
+        <Text style={{ color: '#A6A8B4', fontSize: 12.5 }}>共 {filtered.length} 条</Text>
+        <Tooltip title="刷新"><Button type="text" icon={<ReloadOutlined />} onClick={load} /></Tooltip>
+      </div>
+
+      {/* 列表 · 行卡片（高密度，遵循视觉规范） */}
+      {loading
+        ? <div style={{ padding: '48px 0', textAlign: 'center' }}><Spin /></div>
+        : filtered.length === 0
+          ? <div style={{ border: '1px dashed #DEDEE3', borderRadius: 8, padding: '40px 0', background: '#FCFCFD' }}>
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={!API_ON ? '未连接后端' : (q || fAgent || fIso) ? '没有匹配的会话' : '我创建的 Agent 还没有活跃过的会话'} />
+            </div>
+          : <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {filtered.map(r => {
+                const isCopilot = r.agent === 'copilot';
+                const other = r.initiator && r.initiator !== me;
+                const rounds = Math.ceil((r.count || 0) / 2) || r.count || 0;
+                return (
+                  <div key={r.id} className="sess-row" onClick={() => openDetail(r.id)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 14px', background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, cursor: 'pointer' }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 6, background: '#EEF0FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {isCopilot ? <MessageOutlined style={{ color: ACCENT, fontSize: 16 }} /> : <RobotOutlined style={{ color: ACCENT, fontSize: 17 }} />}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        <span style={{ fontWeight: 650, fontSize: 14.5, color: '#17171C', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.title || '新对话'}</span>
+                        {_statusPill(r.status)}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, color: '#8A8C99', fontSize: 12.5, minWidth: 0 }}>
+                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}>{r.agentName || r.agent}</span>
+                        <span style={{ color: '#D0D0D8' }}>·</span>
+                        <span style={{ ..._MONO, fontSize: 11.5, color: '#A6A8B4', whiteSpace: 'nowrap' }}>{r.id}</span>
+                      </div>
+                    </div>
+                    <span style={pill('#F1F1F4', '#5A5C6B')}>{_envText(r.isolation, r.location)}</span>
+                    <div style={{ width: 96, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }}>
+                      {other && <span style={pill('#FFF8E6', '#946C00')}>他人</span>}
+                      <span style={{ ..._MONO, fontSize: 11.5, color: '#8A8C99' }}>{r.initiator || '—'}</span>
+                    </div>
+                    <span style={{ width: 40, flexShrink: 0, textAlign: 'right', color: '#A6A8B4', fontSize: 12 }}>{rounds} 轮</span>
+                    <span style={{ width: 84, flexShrink: 0, textAlign: 'right', color: '#A6A8B4', fontSize: 12 }}>{(r.updatedAt || '').slice(5)}</span>
+                  </div>
+                );
+              })}
+            </div>}
+
+      {/* 明细抽屉 */}
+      <Drawer open={!!detail} width={600} onClose={() => setDetail(null)} closable styles={{ header: { borderBottom: '1px solid #F1F1F5' }, body: { padding: 0 } }}
+        title={detail && !detail.loading
+          ? <div><div style={{ fontSize: 16, fontWeight: 700, color: '#17171C', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{detail.title || '会话明细'}</div>
+              <div style={{ ..._MONO, fontSize: 11.5, color: '#A6A8B4', marginTop: 2 }}>{detail.id}</div></div>
+          : '会话明细'}>
+        {dLoading || (detail && detail.loading)
+          ? <div style={{ padding: 48, textAlign: 'center' }}><Spin /></div>
+          : detail && (
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              {/* 运行上下文元数据 · 下沉面 */}
+              <div style={{ padding: '18px 20px', background: '#FAFAFB', borderBottom: '1px solid #F1F1F5' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 20px' }}>
+                  {field('所属 Agent', <span>{detail.agentName}{detail.agentVersion ? <span style={{ ...pill('#F1F1F4', '#5A5C6B'), marginLeft: 6 }}>v{detail.agentVersion}</span> : null}</span>)}
+                  {field('运行环境', <span style={pill('#F1F1F4', '#5A5C6B')}>{_envText(detail.isolation, detail.location)}</span>)}
+                  {field('发起人', <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    {detail.initiator && detail.initiator !== me && <span style={pill('#FFF8E6', '#946C00')}>他人</span>}
+                    <span style={_MONO}>{detail.initiator || '—'}</span></span>)}
+                  {field('归集来源', _srcText(detail.source))}
+                  {field('创建时间', <span style={{ ..._MONO, fontSize: 12.5 }}>{detail.createdAt || '—'}</span>)}
+                  {field('最后活跃', <span style={{ ..._MONO, fontSize: 12.5 }}>{detail.updatedAt || '—'}</span>)}
+                </div>
+              </div>
+              {/* 对话回看 · 只读 */}
+              <div style={{ flex: 1, overflow: 'auto', padding: 20 }}>
+                {(detail.messages || []).length === 0
+                  ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="无对话内容" />
+                  : (detail.messages || []).map((m, i) => m.role === 'sys'
+                    ? <div key={i} style={{ textAlign: 'center', fontSize: 12, color: '#A6A8B4', margin: '6px 0 14px' }}>{m.text}</div>
+                    : <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
+                        <div style={{ maxWidth: '82%', padding: '10px 13px', borderRadius: 10, fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', background: m.role === 'user' ? ACCENT : (m.err ? '#FDECEC' : '#F4F4F7'), color: m.role === 'user' ? '#fff' : (m.err ? '#C0392B' : '#2A2A33'), borderBottomRightRadius: m.role === 'user' ? 3 : 10, borderBottomLeftRadius: m.role !== 'user' ? 3 : 10 }}>
+                          {m.text || ''}
+                        </div>
+                      </div>)}
+              </div>
+              <div style={{ padding: '10px 20px', borderTop: '1px solid #F1F1F5', fontSize: 12, color: '#A6A8B4', textAlign: 'center' }}>只读 · 创建人视角回看</div>
+            </div>)}
+      </Drawer>
+    </div>
+  );
+}
+
 /* ================= 根组件 ================= */

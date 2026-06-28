@@ -14,7 +14,7 @@ const { Sider, Content } = Layout;
 const { Text } = Typography;
 import { ACCENT, FRAMEWORKS, PROVIDERS, MODEL_PARAMS, TOOLS, SKILLS, TEMPLATES, fwName, ISOLATIONS, isoName, INIT_WORKSPACES, td, now, mkAgent, INIT_AGENTS } from "./config";
 import { apiCall, API_ON, setApiOn } from "./api";
-import { AgentBuilder, AgentDetail, VersionDiff, MembersPanel, ChatPanel, Playground, SkillMarket, McpMarket, DeployPanel, EnvPanel, pill, antMsg, setAntMsg } from "./components";
+import { AgentBuilder, AgentDetail, VersionDiff, MembersPanel, ChatPanel, Playground, SkillMarket, McpMarket, DeployPanel, EnvPanel, SessionConsole, pill, antMsg, setAntMsg } from "./components";
 
 let AGENT_SEQ = 100;
 function Root() {
@@ -110,6 +110,7 @@ function Root() {
   const sectionLabel = nav === 'chat' ? 'Chat'
     : nav === 'deploy' ? '部署'
     : nav === 'playground' ? 'Playground'
+    : nav === 'session' ? '会话'
     : nav === 'skill' ? '技能'
     : nav === 'mcp' ? 'MCP'
     : nav === 'env' ? '环境'
@@ -145,6 +146,7 @@ function Root() {
             { key: 'agent', icon: <RobotOutlined />, label: 'Agent' },
             { key: 'deploy', icon: <ThunderboltOutlined />, label: '部署' },
             { key: 'playground', icon: <ExperimentOutlined />, label: 'Playground' },
+            { key: 'session', icon: <MessageOutlined />, label: '会话' },
             { key: 'skill', icon: <BulbOutlined />, label: 'Skill' },
             { key: 'mcp', icon: <ToolOutlined />, label: 'MCP' },
             { key: 'env', icon: <AppstoreOutlined />, label: '环境' },
@@ -242,6 +244,7 @@ function Root() {
           {nav === 'chat' && <ChatPanel curWs={curWs} isAdmin={isPlatformAdmin} onChanged={() => { if (API_ON) { loadWorkspaces(); loadAgents(curWs); } }} />}
           {nav === 'deploy' && <DeployPanel agents={visibleAgents} services={services} onServiceChanged={() => { if (API_ON) { loadServices(); loadAgents(curWs); } }} />}
           {nav === 'playground' && <Playground agents={visibleAgents} />}
+          {nav === 'session' && <SessionConsole me={'u0'} />}
           {nav === 'skill' && <SkillMarket wsId={curWs} me={(ws && (ws.members.find(m => m.id === 'u0') || {}).name) || 'Helena（我）'} />}
           {nav === 'mcp' && <McpMarket wsId={curWs} />}
           {nav === 'env' && <EnvPanel />}

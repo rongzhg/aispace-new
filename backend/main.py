@@ -476,11 +476,25 @@ def init_db():
                      "ALTER TABLE installed_skills ADD COLUMN default_on INTEGER DEFAULT 0",
                      "ALTER TABLE installed_mcp ADD COLUMN scope TEXT DEFAULT 'workspace'",
                      "ALTER TABLE installed_mcp ADD COLUMN default_on INTEGER DEFAULT 0",
-                     "ALTER TABLE agents ADD COLUMN scope TEXT DEFAULT 'workspace'"):
+                     "ALTER TABLE agents ADD COLUMN scope TEXT DEFAULT 'workspace'",
+                     # 会话 Tab（spec N）：Agent 记创建人；会话冗余运行元数据，便于按创建人聚合 + 明细展示
+                     "ALTER TABLE agents ADD COLUMN creator TEXT",
+                     "ALTER TABLE sessions ADD COLUMN isolation TEXT",
+                     "ALTER TABLE sessions ADD COLUMN location TEXT DEFAULT 'local'",
+                     "ALTER TABLE sessions ADD COLUMN initiator TEXT",
+                     "ALTER TABLE sessions ADD COLUMN source TEXT DEFAULT 'platform'"):
             try:
                 c.execute(_ddl)
             except Exception:
                 pass
+        # 老库回填：creator 缺失的 Agent 归到所属空间的首个 owner（demo 即 u0=我），保证既有 Agent 进会话 Tab
+        c.execute("UPDATE agents SET creator=("
+                  "SELECT m.user_id FROM members m WHERE m.ws_id=agents.ws_id AND m.role='owner' "
+                  "ORDER BY m.user_id LIMIT 1) WHERE creator IS NULL OR creator=''")
+        c.execute(f"UPDATE agents SET creator='{DEMO_USER}' WHERE creator IS NULL OR creator=''")
+        c.execute("UPDATE sessions SET initiator=user WHERE initiator IS NULL OR initiator=''")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_ref)")
+        c.execute("CREATE INDEX IF NOT EXISTS idx_agents_creator ON agents(creator)")
         c.execute("""CREATE TABLE IF NOT EXISTS ws_disabled (
                      ws_id TEXT, kind TEXT, id TEXT, PRIMARY KEY (ws_id, kind, id))""")
         # 启动清理：保留「用户注册」与「平台全局」，仅清掉公共注册表(clawhub)/内置目录拉入的非 custom 项
@@ -521,11 +535,11 @@ def seed():
         ]
         for a in agents:
             c.execute(
-                "INSERT INTO agents (id,ws_id,name,framework,model,desc,params,files,tools,skills,version,updated_at,deleted) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0)",
+                "INSERT INTO agents (id,ws_id,name,framework,model,desc,params,files,tools,skills,version,updated_at,deleted,creator) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,?)",
                 (a["id"], a["ws_id"], a["name"], a["framework"], a["model"], a["desc"],
                  json.dumps(a["params"]), json.dumps(a["files"]), json.dumps(a["tools"]),
-                 json.dumps(a["skills"]), 1, now()),
+                 json.dumps(a["skills"]), 1, now(), DEMO_USER),
             )
             c.execute("INSERT INTO versions VALUES (?,?,?,?)",
                       (a["id"], 1, now(), json.dumps(a)))
@@ -651,6 +665,7 @@ def row_to_agent(r):
         "model": r["model"], "desc": r["desc"], "params": json.loads(r["params"]),
         "files": json.loads(r["files"]), "tools": json.loads(r["tools"]),
         "skills": json.loads(r["skills"]), "version": r["version"], "updatedAt": r["updated_at"],
+        "creator": (r["creator"] if "creator" in r.keys() else None),
     }
 
 
@@ -735,19 +750,20 @@ def get_agent(aid: str):
 
 
 @app.post("/api/agents")
-def create_agent(body: AgentIn):
+def create_agent(body: AgentIn, x_user: Optional[str] = Header(None, alias="X-User-Id")):
     aid = "a" + str(int(time.time() * 1000))
     ts = now()
     cfg = body.model_dump()
+    creator = _copilot_user(x_user)   # 记创建人：会话 Tab 按它聚合（spec N）
     with db() as c:
         dup = c.execute("SELECT 1 FROM agents WHERE ws_id=? AND name=? AND deleted=0", (body.ws_id, body.name)).fetchone()
         if dup:
             raise HTTPException(400, "同空间内名称已存在")
-        c.execute("INSERT INTO agents (id,ws_id,name,framework,model,desc,params,files,tools,skills,version,updated_at,deleted) "
-                  "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0)",
+        c.execute("INSERT INTO agents (id,ws_id,name,framework,model,desc,params,files,tools,skills,version,updated_at,deleted,creator) "
+                  "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,?)",
                   (aid, body.ws_id, body.name, body.framework, body.model, body.desc,
                    json.dumps(body.params), json.dumps(body.files), json.dumps(body.tools),
-                   json.dumps(body.skills), 1, ts))
+                   json.dumps(body.skills), 1, ts, creator))
         c.execute("INSERT INTO versions VALUES (?,?,?,?)", (aid, 1, ts, json.dumps(cfg)))
     return get_agent(aid)
 
@@ -1255,6 +1271,19 @@ def copilot_stop(x_user: Optional[str] = Header(None, alias="X-User-Id")):
 #   agent_ref: 'copilot' 或某 agent id（统一，普通 agent 也有 session 与历史）。
 #   claude_sid: 续接 token，纯**内部细节**（前端只认我方 session id —— 单一语义）。
 # 旧 /api/copilot/* 与 /api/agents/{id}/service-chat 保留为薄适配器（不破坏上游）。
+def _agent_runtime_meta(agent_ref):
+    """会话创建时快照 Agent 当时的运行形态：(isolation, location)。copilot/未发布兜底为 (None,'local')。"""
+    if not agent_ref or agent_ref == "copilot":
+        return None, "local"
+    iso = None
+    with db() as c:
+        p = c.execute("SELECT isolation FROM published WHERE agent_id=?", (agent_ref,)).fetchone()
+        if p:
+            iso = p["isolation"]
+    loc = (SERVICES.get(agent_ref) or {}).get("location", "local")
+    return iso, loc
+
+
 def _sess_resolve(user, sid, agent_ref="copilot"):
     """返回 (会话id, 续接token, agent_ref)。sid 不存在则按 agent_ref 新建一条（容错，对话不丢）。"""
     with db() as c:
@@ -1263,8 +1292,9 @@ def _sess_resolve(user, sid, agent_ref="copilot"):
             return r["id"], r["claude_sid"], r["agent_ref"]
         nsid = sid or ("s" + uuid.uuid4().hex[:12])
         ts = now()
-        c.execute("INSERT OR IGNORE INTO sessions (id,user,agent_ref,title,claude_sid,messages,status,created_at,updated_at) "
-                  "VALUES (?,?,?,?,?,?,?,?,?)", (nsid, user, agent_ref, "新对话", None, "[]", "active", ts, ts))
+        iso, loc = _agent_runtime_meta(agent_ref)
+        c.execute("INSERT OR IGNORE INTO sessions (id,user,agent_ref,title,claude_sid,messages,status,created_at,updated_at,isolation,location,initiator,source) "
+                  "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", (nsid, user, agent_ref, "新对话", None, "[]", "active", ts, ts, iso, loc, user, "platform"))
     return nsid, None, agent_ref
 
 
@@ -1433,11 +1463,12 @@ def session_create(body: SessionCreateIn, x_user: Optional[str] = Header(None, a
         _ensure_agent_service(agent)
     sid = "s" + uuid.uuid4().hex[:12]
     ts = now()
+    iso, loc = _agent_runtime_meta(agent)
     with db() as c:
-        c.execute("INSERT INTO sessions (id,user,agent_ref,agent_version,environment_ref,title,claude_sid,messages,status,created_at,updated_at) "
-                  "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        c.execute("INSERT INTO sessions (id,user,agent_ref,agent_version,environment_ref,title,claude_sid,messages,status,created_at,updated_at,isolation,location,initiator,source) "
+                  "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                   (sid, user, agent, body.version, body.environment_id, (body.title or "新对话"),
-                   None, "[]", "active", ts, ts))
+                   None, "[]", "active", ts, ts, iso, loc, user, "platform"))
     return {"id": sid, "agent": agent, "version": body.version, "title": body.title or "新对话",
             "messages": [], "status": "active", "updatedAt": ts}
 
@@ -1462,29 +1493,83 @@ def session_events_stream(sid: str, body: SessionEventIn, ws: Optional[str] = No
 
 
 @app.get("/api/sessions")
-def session_list(agent: Optional[str] = None, x_user: Optional[str] = Header(None, alias="X-User-Id")):
-    """列出当前用户的会话（可按 agent 过滤）。"""
+def session_list(agent: Optional[str] = None, scope: str = "mine",
+                 isolation: Optional[str] = None, q: Optional[str] = None,
+                 page: int = 0, size: int = 20,
+                 x_user: Optional[str] = Header(None, alias="X-User-Id")):
+    """列出会话。
+    - scope=mine（缺省）：按「对话发起人=我」列出（沿用旧语义，兼容 Chat/Playground）。
+    - scope=created（会话 Tab，spec N）：按「我是所属 Agent 的创建人」聚合 + copilot 本人会话；
+      仅含至少 1 轮的会话；支持 agent/isolation/关键词过滤与分页。"""
     user = _copilot_user(x_user)
-    q = "SELECT id,agent_ref,title,updated_at,messages FROM sessions WHERE user=?"
+    if scope == "created":
+        # LEFT JOIN 纳入无 agents 行的 copilot；可见 = 我创建的 Agent 的会话 OR copilot 本人会话
+        sql = ("SELECT s.id,s.agent_ref,s.title,s.updated_at,s.messages,s.status,s.isolation,s.location,s.initiator,"
+               "COALESCE(a.name,'通用助手') AS agent_name "
+               "FROM sessions s LEFT JOIN agents a ON a.id=s.agent_ref "
+               "WHERE ((a.creator=? AND a.deleted=0) OR (s.agent_ref='copilot' AND s.user=?)) "
+               "AND json_array_length(s.messages)>=1")
+        args = [user, user]
+        if agent:
+            sql += " AND s.agent_ref=?"; args.append(agent)
+        if isolation:
+            sql += " AND s.isolation=?"; args.append(isolation)
+        if q:
+            sql += " AND s.title LIKE ?"; args.append(f"%{q}%")
+        sql += " ORDER BY s.updated_at DESC"
+        with db() as c:
+            rows = c.execute(sql, args).fetchall()
+        items = [{"id": r["id"], "agent": r["agent_ref"], "agentName": r["agent_name"],
+                  "title": r["title"] or "新对话", "isolation": r["isolation"], "location": r["location"],
+                  "initiator": r["initiator"], "status": r["status"], "updatedAt": r["updated_at"],
+                  "count": len(json.loads(r["messages"] or "[]"))} for r in rows]
+        total = len(items)
+        start = max(0, page) * max(1, size)
+        return {"total": total, "page": page, "size": size, "items": items[start:start + size]}
+    # 旧语义
+    sql = "SELECT id,agent_ref,title,updated_at,messages FROM sessions WHERE user=?"
     args = [user]
     if agent:
-        q += " AND agent_ref=?"; args.append(agent)
-    q += " ORDER BY updated_at DESC"
+        sql += " AND agent_ref=?"; args.append(agent)
+    sql += " ORDER BY updated_at DESC"
     with db() as c:
-        rows = c.execute(q, args).fetchall()
+        rows = c.execute(sql, args).fetchall()
     return [{"id": r["id"], "agent": r["agent_ref"], "title": r["title"] or "新对话",
              "updatedAt": r["updated_at"], "count": len(json.loads(r["messages"] or "[]"))} for r in rows]
+
+
+def _session_visible(c, r, user):
+    """会话可见性（spec N 规范性判据）：我是所属 Agent 创建人 / copilot 本人 / PlatformAdmin（本期 False）。"""
+    if r["agent_ref"] == "copilot":
+        return r["user"] == user
+    a = c.execute("SELECT creator FROM agents WHERE id=?", (r["agent_ref"],)).fetchone()
+    if a and a["creator"] == user:
+        return True
+    return r["user"] == user      # 发起人本人也可见自己的（兼容旧语义）
 
 
 @app.get("/api/sessions/{sid}")
 def session_get(sid: str, x_user: Optional[str] = Header(None, alias="X-User-Id")):
     user = _copilot_user(x_user)
     with db() as c:
-        r = c.execute("SELECT * FROM sessions WHERE id=? AND user=?", (sid, user)).fetchone()
-    if not r:
-        raise HTTPException(404, "会话不存在")
-    return {"id": r["id"], "agent": r["agent_ref"], "title": r["title"] or "新对话",
-            "status": r["status"], "messages": json.loads(r["messages"] or "[]"), "updatedAt": r["updated_at"]}
+        r = c.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
+        if not r or not _session_visible(c, r, user):
+            raise HTTPException(404, "会话不存在")   # 不泄露存在性
+        agent_name, creator = None, None
+        if r["agent_ref"] != "copilot":
+            a = c.execute("SELECT name,creator FROM agents WHERE id=?", (r["agent_ref"],)).fetchone()
+            if a:
+                agent_name, creator = a["name"], a["creator"]
+    cols = r.keys()
+    return {"id": r["id"], "agent": r["agent_ref"], "agentName": agent_name or "通用助手",
+            "agentVersion": (r["agent_version"] if "agent_version" in cols else None),
+            "isolation": (r["isolation"] if "isolation" in cols else None),
+            "location": (r["location"] if "location" in cols else "local"),
+            "initiator": (r["initiator"] if "initiator" in cols else r["user"]),
+            "creator": creator, "source": (r["source"] if "source" in cols else "platform"),
+            "title": r["title"] or "新对话", "status": r["status"],
+            "messages": json.loads(r["messages"] or "[]"),
+            "createdAt": r["created_at"], "updatedAt": r["updated_at"]}
 
 
 @app.put("/api/sessions/{sid}")
@@ -1510,6 +1595,45 @@ def session_delete(sid: str, x_user: Optional[str] = Header(None, alias="X-User-
     with db() as c:
         c.execute("DELETE FROM sessions WHERE id=? AND user=?", (sid, user))
     return {"ok": True}
+
+
+# --------- 平台外「直连」会话旁路归集（spec N Phase 3 平台侧）---------
+# 外部系统经稳定地址/网关直连已发布 Agent（不经 /api/sessions）的会话，由网关/云端运行时
+# 每轮异步回传到此端点，平台 upsert 进 sessions 并对该 Agent 创建人可见。幂等键=(agent_id,session_key,turn)。
+class SessionIngestIn(BaseModel):
+    agent_id: str                       # 被直连的已发布 Agent id
+    session_key: str                    # 外部侧会话键（网关/AgentRun 的会话亲和键）
+    initiator: Optional[str] = None     # 外部发起人标识（可空）
+    turn: Optional[int] = None          # 轮序，用于幂等去重；缺省按当前消息数推断
+    messages: list = []                 # 本次回传的消息 [{role,text}]（增量或全量）
+    isolation: Optional[str] = None
+    title: Optional[str] = None
+
+
+@app.post("/internal/sessions/ingest")
+def session_ingest(body: SessionIngestIn):
+    """网关/云端回传一轮（或多轮）会话。以 'ext:{agent_id}:{session_key}' 为稳定会话 id，幂等 upsert。"""
+    a_id = body.agent_id
+    with db() as c:
+        ag = c.execute("SELECT name,creator FROM agents WHERE id=? AND deleted=0", (a_id,)).fetchone()
+        if not ag:
+            raise HTTPException(404, "Agent 不存在")
+        sid = "ext:" + a_id + ":" + body.session_key
+        ts = now()
+        iso = body.isolation or _agent_runtime_meta(a_id)[0]
+        r = c.execute("SELECT messages FROM sessions WHERE id=?", (sid,)).fetchone()
+        owner = ag["creator"] or DEMO_USER     # 归到创建人名下，确保其在会话 Tab 可见
+        if not r:
+            title = (body.title or (body.messages[0].get("text", "") if body.messages else "") or "外部会话").strip()[:24] or "外部会话"
+            c.execute("INSERT INTO sessions (id,user,agent_ref,title,claude_sid,messages,status,created_at,updated_at,isolation,location,initiator,source) "
+                      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                      (sid, owner, a_id, title, None, json.dumps(body.messages, ensure_ascii=False),
+                       "active", ts, ts, iso, "cloud", body.initiator or "external", "gateway"))
+        else:
+            # 幂等：以回传 messages 为该会话的当前全量（网关侧按 turn 累积回传）；避免重复 append
+            c.execute("UPDATE sessions SET messages=?, updated_at=?, isolation=COALESCE(?,isolation) WHERE id=?",
+                      (json.dumps(body.messages, ensure_ascii=False), ts, iso, sid))
+    return {"ok": True, "session_id": sid}
 
 
 # ---------------- 旧 copilot 端点：薄适配器（前端不变；内部走统一 Session 层，agent_ref='copilot'）----------------
