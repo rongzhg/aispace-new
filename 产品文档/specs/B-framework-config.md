@@ -1,7 +1,7 @@
 ---
 name: 框架配置
-last amended: 2026-06-28
-version: 3
+last amended: 2026-06-29
+version: 4
 description: 多框架支持、框架差异化配置文件编辑、配置模板
 ---
 
@@ -48,16 +48,17 @@ description: 多框架支持、框架差异化配置文件编辑、配置模板
 **User Story:** 作为项目成员，我希望按所选框架编辑对应的配置文件，以便定义 Agent 的行为、角色和能力。
 
 #### Acceptance Criteria
-1. WHERE 框架为 Claude Code 系统 SHALL 提供一个等宽字体配置编辑器（对应 claude.md）
-2. WHERE 框架为 OpenClaw 系统 SHALL 以 **Tab 切换**方式提供三个独立等宽字体编辑器：user.md、agent.md、role.md，每个编辑器占满宽度
-3. WHERE 某个 Tab 已有内容 系统 SHALL 在该 Tab 上以小圆点等标识提示有内容
-4. WHEN 用户在配置编辑器中输入 THEN 系统 SHALL 实时同步内容用于配置预览(见 Spec G)
-5. WHERE 编辑器为 Markdown 系统 SHALL 提供 Markdown 语法高亮、行号、自动换行，以等宽字体（见组件库 fontFamilyCode）呈现
-6. WHERE 本期范围 系统 SHALL NOT 对配置内容做结构/schema 校验（仅高亮，不做强校验）
+1. WHERE 框架为 Claude Code 系统 SHALL 提供一个等宽字体配置编辑器（对应 claude.md，单文件直接铺开、不显示 Tab）
+2. WHERE 框架为 OpenClaw 系统 SHALL 以 **Tab 切换**方式提供三个独立等宽字体编辑器，每个占满宽度；**Tab 顺序为 role.md → agent.md → user.md**（取自模板键序）
+3. WHERE 某个 Tab 已有非空内容 系统 SHALL 在该 Tab 名后以蓝色小圆点标识有内容
+4. WHEN 用户在配置编辑器中输入 THEN 系统 SHALL 实时同步内容到工作副本（用于试跑、保存；配置预览见 Spec G，⬜后续在工作台补回）
+5. WHERE 编辑器 系统 SHALL 以等宽字体（fontFamilyCode）+ 自动增高（autoSize）呈现；🔸 **当前实现为 Ant Design Input.TextArea，未提供 Markdown 语法高亮与行号**（原 spec 描述的 Monaco 高亮 / 行号属 ⬜后续）
+6. WHERE 本期范围 系统 SHALL NOT 对配置内容做结构/schema 校验（纯文本编辑，不做强校验）
+7. WHERE 编辑器顶部 系统 SHALL 提供「重置为模板」操作，将当前框架全部配置文件还原为默认模板
 
 #### 引用 / 影响
 - 术语：ConfigFile, Framework, ConfigPreview
-- 组件：Monaco(markdown)、Tabs(OpenClaw 三文件)
+- 组件：Input.TextArea(等宽,autoSize；⬜后续可换 Monaco)、Tabs(OpenClaw 三文件)、Button(重置为模板)
 - 现有功能：与配置预览(G)联动
 
 #### 设计决策
@@ -76,16 +77,17 @@ description: 多框架支持、框架差异化配置文件编辑、配置模板
 3. WHEN 用户清空后想恢复 THEN 系统 SHALL 提供"重置为模板"操作还原默认模板
 
 #### 设计决策
-- 本期模板内容**写死在前端**（取自 ../templates/ 下的文件），不做后台配置。
+- 本期模板内容**写死在前端**：定义于 `frontend/src/config.ts` 的 `TEMPLATES` 常量（非独立模板文件），不做后台配置。
 - ⬜后续 action：模板改为后台可配置（由管理员维护、支持多版本）。
 
-#### 模板资产（已生成）
-- Claude Code：`../templates/claude-code/claude.md`
-- OpenClaw：`../templates/openclaw/role.md`、`agent.md`、`user.md`
+#### 模板资产（前端内联）
+- Claude Code：`TEMPLATES.CLAUDE_CODE['claude.md']`（角色 / 目标 / 工作方式 / 约束 / 输出风格 五段骨架）
+- OpenClaw：`TEMPLATES.OPENCLAW` 含 `role.md`（角色/性格/原则）、`agent.md`（能力/流程/工具使用/约束）、`user.md`（使用者/偏好/背景）
+- ⬜后续：若改为独立模板文件（如 ../templates/）或后台维护，再调整本节路径
 
 #### 引用 / 影响
 - 术语：ConfigFile, Framework
-- 组件：Monaco、Button
+- 组件：Input.TextArea、Button(重置为模板)
 
 #### 待确认 / 假设
-- 已定：模板写死在前端；后台可配置列为后续 action。模板内容已生成（见上）。
+- 已定：模板写死在前端 config.ts；后台可配置列为后续 action。

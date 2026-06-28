@@ -1,7 +1,7 @@
 ---
 name: 运行与发布
-last amended: 2026-06-28
-version: 10
+last amended: 2026-06-29
+version: 11
 description: Agent 试跑、Head/Live/Runtime 发布模型、部署方式、对外调用协议、Playground、部署控制台、运行服务运维、实例约束与管理、框架可插拔、运行时隔离级别
 ---
 
@@ -115,20 +115,33 @@ description: Agent 试跑、Head/Live/Runtime 发布模型、部署方式、对�
 
 ---
 
-### Requirement: Playground（与已发布 Agent 对话） 🔸MVP
+### Requirement: Playground（与已发布 Agent 对话） 🔸MVP（已落地）
 **User Story:** 作为项目成员，我希望在一个集中入口与所有已发布的 Agent 对话，以便试用线上版本。
 
 #### Acceptance Criteria
 1. WHERE 侧边栏 系统 SHALL 提供「Playground」入口
-2. WHEN 用户进入 Playground THEN 系统 SHALL 列出**全部已发布**的 Agent，并在选择器中展示名称、Live 版本与框架；模型可作为下拉补充信息但不作为主选择信息
-3. WHEN 用户选择某个已发布 Agent THEN 系统 SHALL 用其**Live 版本**配置开始对话（复用调试对话组件、真实运行、流式逐字显示）
-4. WHERE Playground 系统 SHALL 提供该 Agent 名下会话侧栏，支持新会话、切换历史会话、删除会话，并通过统一 Session API 回显历史
-5. WHERE 还没有已发布 Agent 系统 SHALL 展示空状态并引导去「发布」
+2. WHEN 用户进入 Playground THEN 系统 SHALL 列出**全部已发布**的 Agent（来源 `GET /api/published`），并在选择器中展示名称、Live 版本号（等宽码片 `vN`）与框架（Tag）；模型作为下拉项的补充信息呈现，不作为主选择信息
+3. WHEN 用户进入 Playground THEN 系统 SHALL **默认选中列表第一个**已发布 Agent 并自动开始对话，无需用户先手动选择
+4. WHEN 用户选择某个已发布 Agent THEN 系统 SHALL 用其**已发布版本**配置开始对话（复用调试对话组件 DebugPanel、真实运行、流式逐字显示），并按 `agentId + version + 当前会话` 作为对话组件的 key 在切换时重置
+5. WHERE Playground 系统 SHALL 提供该 Agent 名下会话侧栏，支持新建会话、切换历史会话、删除会话，并通过统一 Session API（`GET /api/sessions?agent=` 列表、`GET /api/sessions/{id}` 详情回显、`POST /api/sessions` 新建、`DELETE /api/sessions/{id}` 删除）维护
+6. WHEN 选中某 Agent 且其名下已有会话 THEN 系统 SHALL 自动打开**最近一条**会话并回显历史；若无会话则**自动新建一条**（建会话即确保云端沙箱就绪）
+7. WHERE 对话发生在某条会话中 系统 SHALL 走统一 Session 事件端点 `POST /api/sessions/{sid}/events[/stream]`；未绑定会话时回退到无状态服务调用 `POST /api/agents/{id}/service-chat[/stream]`
+8. WHERE 新建会话 系统 SHALL **复用已存在的空会话**（消息数为 0）而非重复创建，并对 StrictMode 双跑 / 连点做并发去重
+9. WHERE 删除当前会话 系统 SHALL 自动切到剩余最近一条；若已无会话则为当前 Agent 自动新建一条
+10. WHERE 会话侧栏 系统 SHALL 可整体收起 / 展开（收起态保留「新建会话」「展开」两个图标按钮）
+11. WHERE 选中 Agent 的运行态可得（来源 `GET /api/services`）系统 SHALL 在对话区头部以徽标展示隔离级别（名称 + L 级）、本地 / 云端沙箱与运行状态（running / failed / 其他）
+12. WHERE 还没有已发布 Agent 系统 SHALL 展示空状态并引导「去详情或编辑页点『发布』」（此时不渲染 Agent 选择器）
+13. WHERE 运行引擎不可用 / 未连后端 系统 SHALL 走本地 mock 占位响应（副标题标注「未连后端 · 本地 mock」），保证链路可跑通
+14. WHERE Playground 系统 MAY 以**内嵌（embedded）**形态复用同一组件（隐藏页头、压缩选择器），供其他页面承载
 
 #### 引用 / 影响
-- 术语：Agent, Version
-- 组件：Playground 页（Agent 选择器 + 会话侧栏 + 右侧对话）；复用调试对话组件
-- 现有功能：与发布 / 运行服务 / M 统一 Session 联动
+- 术语：Agent, Version, Session
+- 组件：Playground 页（Agent 选择器 + 可收起会话侧栏 + 右侧对话 + 运行态徽标）；复用调试对话组件 DebugPanel
+- 现有功能：与发布 / 运行服务（`/api/services` 运行态）/ M 统一 Session 联动
+
+#### 待确认 / 假设
+- ✅已落地：Playground 接入统一 Session（已发布 Agent 在界面获得多会话历史、回显、增删切）
+- ❓选中后用其**已发布版本**配置：当前按 `/api/published` 返回的版本取配置；多版本灰度在线时的版本选择策略待灰度能力（⬜后续）落地后明确
 
 ---
 

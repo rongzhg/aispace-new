@@ -1,7 +1,7 @@
 ---
 name: Agent 调用契约与会话（Managed Agent 标准）
-last amended: 2026-06-27
-version: 1
+last amended: 2026-06-29
+version: 2
 description: 对齐业内 Managed Agents（Claude / Qoder / Gemini）的 Agent + Environment + Session 模型——统一会话(服务端有状态)、事件驱动调用、稳定寻址、单一 session_id 语义。这是对外/对内调用的核心契约。
 ---
 
@@ -39,7 +39,7 @@ Session      有状态实例 = (Agent + Environment),服务端持有历史,按 i
 - 设计决策：以 Claude/Qoder Managed Agents 为标准；落地分阶段(见文末路线)
 
 #### 待确认 / 假设
-- ⬜后续：Environment 作为一等资源(Phase 2);事件状态机与异步任务事件(Phase 3)
+- 🔸部分已落地：Environment 已作为可管理资源（`/api/environments` CRUD + 环境 Tab），但**尚未**在 `POST /api/sessions` 时绑定 `environment_id`（Phase 2 剩余）；事件状态机与异步任务事件仍为 ⬜后续(Phase 3)
 
 ---
 
@@ -56,11 +56,11 @@ Session      有状态实例 = (Agent + Environment),服务端持有历史,按 i
 
 #### 引用 / 影响
 - 术语：Session, Agent
-- 组件：Chat 会话侧栏(L)、Playground(I) 可复用同一会话接口
+- 组件：Chat 会话侧栏(L) 走 `/api/copilot/sessions/*`（copilot 适配器，支持重命名）；Playground(I) 已接入统一 `/api/sessions/*`（含会话列表/新建/切换/删除）；两者同享服务端落库与单一 session_id 语义
 - 现有功能：替代"调用方事后回写整段历史"的易丢方案
 
 #### 待确认 / 假设
-- ⬜后续：把 Playground 也接入统一会话(已发布 agent 在界面上获得多会话历史)
+- ✅已落地：Playground 已接入统一会话——已发布 agent 在 Playground 内获得多会话历史。`pick(agent)` 即 `GET /api/sessions?agent={id}` 拉取该 agent 名下会话，有则打开最近一条（`GET /api/sessions/{id}` 回显 messages），无则 `POST /api/sessions {agent}` 新建；侧栏支持新建（复用空会话防重复建）、切换、删除（`DELETE /api/sessions/{id}`）；对话经 `POST /api/sessions/{id}/events[/stream]` 驱动并逐轮落库。Playground **未**复用统一会话的「重命名」（标题由首条消息自动生成）。
 - ❓会话保留期 / 归档策略(对应标准的 archive)
 
 ---
@@ -102,14 +102,17 @@ Session      有状态实例 = (Agent + Environment),服务端持有历史,按 i
 
 > 这是被本 spec 固化的**对外约定**;完整请求/响应 schema 见 ../../技术文档/接口契约.md「统一 Session API」。
 
-**统一 Session API（copilot 与已发布 agent 通用）**
-- `POST /api/sessions` `{agent, environment_id?, title?}` → `{id, agent, status}`（`agent`='copilot' 或某 agent id）
-- `POST /api/sessions/{id}/events[/stream]` `{events:[{type:"user.message",content:[{type:"text",text}]}]}`（或简写 `{message}`）→ SSE `delta|done|error`;**服务端每轮原子落库**;返回我方 `session_id`
-- `GET /api/sessions[?agent=]` 列表 · `GET /api/sessions/{id}` 详情(含 messages) · `PUT /api/sessions/{id}` 改名 · `DELETE /api/sessions/{id}`
+**统一 Session API（copilot 与已发布 agent 通用；Playground 已接入）**
+- `POST /api/sessions` `{agent, environment_id?, title?, version?}` → `{id, agent, title, updatedAt, status}`（`agent`='copilot' 或某 agent id；Playground 实际只传 `{agent}`，`environment_id` 尚未下发）
+- `POST /api/sessions/{id}/events[/stream]` `{events:[{type:"user.message",content:[{type:"text",text}]}]}`（或简写 `{message, session_id?}`）→ SSE `delta|done|error`;**服务端每轮原子落库**;`done` 可回带 `session_id`
+- `GET /api/sessions[?scope=&agent=&isolation=&q=&page=&size=]` 列表（会话 Tab 用 `scope=created` 返回 `{items,total,facets}`；Playground 用 `?agent=` 返回数组） · `GET /api/sessions/{id}` 详情(含 `messages:[{role,text,ts,err?}]` 及元数据) · `PUT /api/sessions/{id}` 改名 · `DELETE /api/sessions/{id}` 删除
+
+**Environment API（Phase 2 部分已落地）**
+- `GET /api/environments` 列表 · `POST /api/environments` `{name, isolation, description?}` 新建自定义环境 · `DELETE /api/environments/{id}` 删除（内置 L1/L2/L3 不可删）。**尚未**在 `POST /api/sessions` 时绑定。
 
 **兼容旧端点（薄适配器,不破坏上游）**
-- `/api/copilot/chat[/stream]`、`/api/copilot/sessions/*` → 内部走统一 Session（`agent_ref='copilot'`）
-- `/api/agents/{id}/service-chat[/stream]` → 保留为「调用方自管 session_id（续接 token）」的无状态服务调用
+- `/api/copilot/chat[/stream]`、`/api/copilot/sessions/*`（list/get/POST 新建/PUT 改名或回写/DELETE） → 内部走统一 Session（`agent_ref='copilot'`）；Chat 会话侧栏即用此面（含重命名）
+- `/api/agents/{id}/service-chat[/stream]` → 保留为「调用方自管 session_id（续接 token）」的无状态服务调用；Playground 在尚未建 session 时回退到此端点
 
 **约定**：`session_id` 单一语义 = 平台会话 id;续接 token 内部;错误用 HTTP 状态码 + `{detail}` 或 SSE `error` 事件。
 
@@ -132,17 +135,17 @@ Session      有状态实例 = (Agent + Environment),服务端持有历史,按 i
 | ⑩ | `POST /v1/sessions/{id}`：**会话内热更** `agent.tools`/`agent.mcp_servers`（需 idle，session-local，全量替换） | `PUT /api/sessions/{id}` **仅改 title** | 缺 session-local 配置覆盖 | P4 |
 | ⑪ | `POST /v1/sessions/{id}/archive`（封存历史、禁再发事件） | 无 | 缺 archive | P4 |
 | ⑫ | `DELETE /v1/sessions/{id}`（删记录+事件+沙箱，running 需先 interrupt） | `DELETE /api/sessions/{id}` 硬删行 | 行为近似；无「running 保护」、无沙箱回收 | — |
-| ⑬ | **Environment** 一等资源（create session 时绑） | 无 `/api/environments`，isolation 挂发布记录 | **最大结构缺口**：env 未一等化 | P2 |
+| ⑬ | **Environment** 一等资源（create session 时绑） | **已有** `/api/environments`（GET/POST/DELETE，环境 Tab 可建/删自定义环境 + 三档内置 L1/L2/L3）；但 `POST /api/sessions` **仍不带 `environment_id`**，隔离实际仍挂发布记录 | env 已资源化（列表/增删），**尚未在 create-session 时绑定** → 半步缺口 | P2（部分已落地） |
 | ⑭ | **Vault**（MCP OAuth 凭证托管，平台代刷 token） | 无 | 完全缺 | P4 |
 | ⑮ | **Agent** 独立版本化资源、session 引用 | `GET/POST/PUT/DELETE /api/agents`，已版本化、可钉 version | ✅ 概念对齐 | ✅ |
 
-**总账**：外形契约（三资源、统一 session、版本钉选、标准事件体、隔离正交）已对齐到 Phase 1；差距全在「**事件驱动的深度**」——Claude 是「事件日志 + 状态机 + 富事件 + 两步生命周期」的异步底座，本项目目前是「同步 invoke + 消息数组」的聊天底座。对应下方 Phase 2/3/4。
+**总账**：外形契约（三资源、统一 session、版本钉选、标准事件体、隔离正交）已对齐到 Phase 1，并已**把 Playground 接入统一 session**、**把 Environment 资源化（CRUD + 环境 Tab）**——Phase 2 仅剩「create-session 绑 environment_id」一步。差距主要仍在「**事件驱动的深度**」——Claude 是「事件日志 + 状态机 + 富事件 + 两步生命周期」的异步底座，本项目目前是「同步 invoke + 消息数组」的聊天底座。对应下方 Phase 3/4。
 
 ## 对齐路线（分阶段，旧端点留适配器）
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | Phase 1 | 统一 Session（服务端历史、单一 session_id、覆盖全部 agent、事件体兼容） | ✅已落地 |
-| Phase 2 | Environment 一等资源（`/api/environments`,Session 绑定；对照 ⑬①） | ⬜ |
+| Phase 2 | Environment 一等资源（`/api/environments` CRUD ✅已落地；Session 创建绑定 `environment_id` ⬜剩余；对照 ⑬①） | 🔸部分 |
 | Phase 3 | 事件状态机（独立流端点、事件日志、`interrupt`/`tool_confirmation`/`tool.use`/异步任务事件；对照 ②③④⑤⑥⑦） | ⬜ |
 | Phase 4 | session 状态机+`stop_reason` / archive / vaults(MCP 凭证) / session 创建钉 agent 版本 / 会话内热更（对照 ⑧⑩⑪⑭） | ⬜ |

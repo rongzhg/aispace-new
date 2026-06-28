@@ -1,7 +1,7 @@
 ---
 name: 会话控制台（会话 Tab）
-last amended: 2026-06-28
-version: 1
+last amended: 2026-06-29
+version: 2
 description: 一个新的「会话」Tab，按「创建人」维度聚合并展示我创建的 Agent（含 L1/L2/L3 三种运行方式）曾经活跃过的全部会话明细；只能看到自己是创建人的 Agent 的会话。
 ---
 
@@ -28,12 +28,12 @@ description: 一个新的「会话」Tab，按「创建人」维度聚合并展�
 
 ## ADDED Requirements
 
-### Requirement: 会话 Tab 入口与跨 Agent 聚合列表 🔸MVP
+### Requirement: 会话 Tab 入口与跨 Agent 聚合列表 ✅已确认（已落地）
 **User Story:** 作为 Agent 创建人，我希望有一个「会话」Tab，把我创建的所有 Agent（不论跑在哪种环境）曾经活跃过的会话聚合成一个列表，以便集中了解我的 Agent 都被怎么使用。
 
 #### Acceptance Criteria
 1. WHEN 用户点击左侧导航「会话」 THEN 系统 SHALL 进入会话 Tab，并展示一个跨 Agent 的会话列表
-2. WHERE 会话列表 系统 SHALL 每行展示：会话标题、所属 Agent 名称、运行环境（共享 L1 / 独立 L2 / 即用即弃 L3）、会话状态、最后活跃时间、对话轮次数
+2. WHERE 会话列表 系统 SHALL 每行展示：会话标题（含状态药丸，如「● 活跃」）、所属 Agent 名称、运行环境（共享 L1 / 独立 L2 / 即用即弃 L3 · 本地/云端）、发起人（非本人时加「他人」标记）、对话轮次数（缺省按消息数 ⌈count/2⌉ 估算）、最后活跃时间
 3. WHERE 一个 Agent 跑在 L1/L2/L3 任意一种环境 系统 SHALL 同等纳入聚合，不因隔离级别不同而遗漏或区别对待（隔离与归集正交）
 4. WHERE 通用助手 copilot 系统 SHALL 视作一个**特殊 Agent** 同样纳入本 Tab——其会话归该会话的发起人本人可见（copilot 无独立创建人，发起人即可见人）
 5. WHERE 某会话**一轮对话都没有发生**（只新建、无任何 user/assistant 消息）系统 SHALL **不计入**列表（“曾经活跃过”口径=至少 1 轮）
@@ -92,15 +92,17 @@ description: 一个新的「会话」Tab，按「创建人」维度聚合并展�
 
 ---
 
-### Requirement: 会话明细回看 🔸MVP
+### Requirement: 会话明细回看 ✅已确认（已落地）
 **User Story:** 作为 Agent 创建人，我希望点开某条会话看到完整的对话过程与运行上下文，以便排查问题、评估效果、复盘使用方式。
 
 #### Acceptance Criteria
 1. WHEN 用户点击某条会话 THEN 系统 SHALL 打开该会话明细，按时间顺序完整展示每一轮 user / assistant 消息
-2. WHERE 会话明细 系统 SHALL 展示运行上下文：所属 Agent 及**调用时的版本号**、运行环境/隔离级别、本地或云端、对话发起人、创建时间、最后活跃时间、状态
-3. WHERE 某轮消息标记为出错 系统 SHALL 在该轮可视化标注「出错」，便于定位失败轮次
-4. WHERE 会话明细 系统 SHALL 为**只读**——创建人只能回看，不能在此续写或修改历史
-5. WHEN 用户从明细返回 THEN 系统 SHALL 回到聚合列表并保留此前的过滤/分页状态
+2. WHERE 会话明细 系统 SHALL 展示运行上下文：标题、会话 id、状态（标题区）；并在元数据条展示**列表未覆盖**的运行上下文——调用时的版本号（`v{agentVersion}`）、归集来源（平台界面/网关直连/云端回传）、创建时间（其余如所属 Agent/环境/发起人/最后活跃已在列表呈现，不在明细重复）
+3. WHERE 每条消息 系统 SHALL 按 user/assistant 区分气泡左右，并各自带时间戳；`role==='sys'` 的系统提示居中弱化展示
+4. WHERE 某轮消息标记为出错（`m.err`）系统 SHALL 在该轮可视化标注「出错」并以错误色气泡呈现，便于定位失败轮次
+5. WHERE 会话明细 系统 SHALL 为**只读**——创建人只能回看，不能在此续写或修改历史（底部固定「只读 · 创建人视角回看」提示）
+6. WHERE 明细抽屉 系统 SHALL 可左右拖拽改变宽度（默认 560px，可拖拽范围 420px～视口宽-120px）
+7. WHEN 用户从明细返回 THEN 系统 SHALL 回到聚合列表并保留此前的过滤/分页状态
 
 #### 引用 / 影响
 - 术语：Session, Version, Environment, 对话发起人
@@ -113,15 +115,16 @@ description: 一个新的「会话」Tab，按「创建人」维度聚合并展�
 
 ---
 
-### Requirement: 会话检索与过滤 🔸MVP
+### Requirement: 会话检索与过滤 ✅已确认（已落地）
 **User Story:** 作为创建人，当我有很多 Agent、很多会话时，我希望按 Agent、环境、时间、状态过滤并搜索，以便快速定位目标会话。
 
 #### Acceptance Criteria
-1. WHERE 会话 Tab 系统 SHALL 提供按「所属 Agent」过滤（候选项=我创建的 Agent 列表）
-2. WHERE 会话 Tab 系统 SHALL 提供按「运行环境/隔离级别（L1/L2/L3）」过滤
-3. WHERE 会话 Tab 系统 SHALL 提供按关键词搜索会话标题；搜索 SHALL 仅在「我可见」的会话范围内进行
-4. WHEN 用户施加任一过滤/搜索 THEN 系统 SHALL 即时刷新列表与分页计数，匹配为 0 时展示空状态
-5. WHERE 过滤条件 系统 SHALL 可组合（Agent + 环境 + 关键词同时生效，取交集）
+1. WHERE 会话 Tab 系统 SHALL 提供按「所属 Agent」过滤；候选项来自服务端返回的 `facets.agents`（含每个 Agent 的会话计数，作为下拉文案 `名称（N）`），可搜索
+2. WHERE 会话 Tab 系统 SHALL 提供按「运行环境/隔离级别（L1/L2/L3）」过滤（Segmented：全部环境 / 共享 L1 / 独立 L2 / 即用即弃 L3）
+3. WHERE 会话 Tab 系统 SHALL 提供按关键词搜索会话标题；输入**防抖 300ms** 后才打服务端（`q` 参数），并回到第 1 页；搜索 SHALL 仅在「我可见」的会话范围内进行
+4. WHEN 用户施加任一过滤/搜索 THEN 系统 SHALL 重置到第 1 页并刷新列表与分页计数（工具条显示「共 N 条」，有过滤时附「（已过滤）」），匹配为 0 时展示「没有匹配的会话」空状态
+5. WHERE 过滤条件 系统 SHALL 可组合（Agent + 环境 + 关键词同时生效，取交集）；`facets`（概览/候选全集）取自服务端且**不随过滤变化**
+6. WHERE 列表刷新 系统 SHALL 由过滤/搜索/翻页变更驱动，并提供手动「刷新」按钮；**不做自动轮询**（明细打开后亦为一次性拉取，不实时跟流）
 
 #### 引用 / 影响
 - 术语：Agent, 隔离级别(L1/L2/L3), Session
@@ -160,15 +163,15 @@ description: 一个新的「会话」Tab，按「创建人」维度聚合并展�
 
 > 本 Tab 不新增调用语义，仅在 M 的统一 Session API 上**扩展只读聚合查询维度**；完整 schema 见 ../../技术文档/接口契约.md。
 
-- `GET /api/sessions?scope=created[&agent=&isolation=&q=&page=&size=]` → 按「当前用户为创建人」聚合（含 copilot 本人会话），仅返回**至少 1 轮**的会话，含 agent 名/环境/状态/轮次/最后活跃。缺省 `scope=mine`（沿用旧语义=按发起人看自己的）。
-- `GET /api/sessions/{id}`（扩展返回）→ 在原 messages（**完整内容、不脱敏**）基础上补充 `agent`、`agentName`、`agentVersion`、`isolation`、`location`、`initiator`（发起人）、`createdAt` 等元数据；服务端先校验「当前用户是该会话所属 Agent 的创建人，或 copilot 本人，或 PlatformAdmin（后续）」，否则 404。
+- `GET /api/sessions?scope=created&page={0-based}&size=20[&agent=&isolation=&q=]` → 按「当前用户为创建人」聚合（含 copilot 本人会话），仅返回**至少 1 轮**的会话。响应 `{ items:[…], total, facets:{ agents:[{value,label,count}] } }`；每行字段含 `id`、`title`、`agentName`/`agent`、`isolation`、`location`、`initiator`、`rounds`（或由 `count` 推算）、`status`、`updatedAt`。缺省 `scope=mine`（沿用旧语义=按发起人看自己的）。
+- `GET /api/sessions/{id}`（扩展返回）→ 在原 `messages:[{role,text,ts,err?}]`（**完整内容、不脱敏**；`role` ∈ user/assistant/sys）基础上补充 `title`、`status`、`agentVersion`、`source`（platform/gateway/cloud-callback，明细以「平台界面/网关直连/云端回传」呈现）、`createdAt` 等元数据；服务端先校验「当前用户是该会话所属 Agent 的创建人，或 copilot 本人，或 PlatformAdmin（后续）」，否则 404。
 - **可见性判据（规范性）**：一条会话对用户 U 可见 ⟺ `session.agent_ref` 对应 Agent 的 `creator == U`（创建人维度）**或** `session.agent_ref=='copilot' 且 session.user == U`（copilot 本人）**或** `U 为 PlatformAdmin`（⬜后续）。会话 Tab 主用创建人维度。
 
 ## 落地路线（分阶段）
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| Phase 1 | Agent 记录创建人；`GET /api/sessions?scope=created`；会话 Tab 列表 + 明细 + 基础过滤（基于已落库的 L1/L2/L3 会话） | 🔸MVP |
-| Phase 2 | 明细元数据补全（版本/环境/发起人/来源）、按 Agent/环境/关键词过滤完善 | 🔸MVP |
-| Phase 3 | 外部直连（网关/云端）会话旁路归集 + 来源标记 + 可靠投递 | ⬜ |
-| Phase 4 | 内容全文检索、导出、按发起人过滤、内容脱敏策略、归档/保留期 | ⬜ |
+| Phase 1 | Agent 记录创建人；`GET /api/sessions?scope=created`；会话 Tab 列表 + 明细 + 基础过滤（基于已落库的 L1/L2/L3 会话） | ✅已落地 |
+| Phase 2 | 明细元数据补全（版本/环境/发起人/来源）、按 Agent/环境/关键词过滤完善、防抖搜索、facets 候选、可拖拽明细抽屉 | ✅已落地 |
+| Phase 3 | 外部直连（网关/云端）会话旁路归集 + 来源标记 + 可靠投递（前端已能渲染 `source`=网关直连/云端回传；后端旁路归集投递尚未实现） | 🔸部分（仅前端展示位） |
+| Phase 4 | 内容全文检索、导出、按发起人过滤、内容脱敏策略、归档/保留期、PlatformAdmin 全局视角 | ⬜ |

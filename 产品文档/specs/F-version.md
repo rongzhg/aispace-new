@@ -1,7 +1,7 @@
 ---
 name: 版本管理
-last amended: 2026-06-28
-version: 2
+last amended: 2026-06-29
+version: 3
 description: 版本快照、Head/Live 关系、版本历史、版本对比、版本回滚
 ---
 
@@ -22,33 +22,36 @@ description: 版本快照、Head/Live 关系、版本历史、版本对比、版
 4. WHERE 版本已生成 系统 SHALL 记录该版本的完整配置快照与生成时间
 5. WHILE 历史版本存在 系统 SHALL 不允许修改历史版本（只读）
 6. WHERE 当前最新已保存版本 系统 SHALL 称为 Head；Head 可能尚未发布为 Live
+7. WHERE 无变更保存 系统 SHALL NOT 生成新版本（保存按钮在工作副本与来源版本一致时禁用）
 
 #### 引用 / 影响
 - 术语：Version, Agent, ConfigFile
-- 组件：—（数据为主）
+- 组件：版本快照结构 `{version, createdAt, config}`（见 config.ts mkAgent）；数据为主
 - 现有功能：与创建/编辑(A)、发布(I)联动（保存生成 Head；发布选择已保存版本成为 Live）
 
 #### 待确认 / 假设
-- ❓版本是否记录操作人
+- ❓版本是否记录操作人（当前版本快照仅含 version / createdAt / config，未记录操作人）
 
 ---
 
-### Requirement: 版本历史 🔸MVP
+### Requirement: 版本历史 🔸MVP（已在 demo 实现）
 **User Story:** 作为项目成员，我希望查看一个 Agent 的所有历史版本，以便了解它改过什么。
 
 #### Acceptance Criteria
-1. WHEN 用户进入「版本与回滚」 THEN 系统 SHALL 按时间倒序列出所有版本：版本号、生成时间、(可选)操作人
-2. WHEN 用户点击某版本 THEN 系统 SHALL 展示该版本的只读配置详情
+1. WHEN 用户进入「版本与回滚」抽屉 THEN 系统 SHALL 在左侧栏按版本号倒序列出所有版本：版本号、生成时间、最新 / 已发布徽章；（操作人暂未记录）
+2. WHEN 用户点击某版本 THEN 系统 SHALL 在右侧「版本明细 / 回滚」Tab 展示该版本只读配置详情（描述、模型、参数、工具、技能、指令文件）
 3. WHERE 当前 Head 版本 系统 SHALL 在列表中明确标识「最新」
 4. WHERE 当前 Live 版本 系统 SHALL 在列表中明确标识「已发布」
-5. WHERE 版本历史入口 系统 SHALL 出现在 Agent 工作台顶部与线上发布与运行面板中，文案为「版本与回滚」或「回滚 / 历史」
+5. WHERE 版本历史入口 系统 SHALL 出现在 Agent 工作台顶栏（「版本与回滚 · N」）与右侧线上发布与运行面板（「回滚 / 历史」），均唤起同一抽屉
+6. WHERE Agent 仅一个版本 系统 SHALL 缺省以自身配置兜底为单版本快照（顶栏不显示版本计数后缀）
 
 #### 引用 / 影响
 - 术语：Version
-- 组件：Timeline/List、Tag、Monaco(只读)
+- 组件：Drawer(VersionHistory)、左侧版本 List、Segmented(明细/对比)、Descriptions、Collapse(只读指令文件)、Tag(最新/已发布)
 
 #### 待确认 / 假设
-- 已定：入口在 Agent 工作台内，以抽屉承载版本明细、回滚与对比
+- 已定：入口在 Agent 工作台内，以抽屉（VersionHistory）承载版本明细、回滚与对比
+- ❓版本列表的操作人列（当前未存）
 
 ---
 
@@ -69,12 +72,12 @@ description: 版本快照、Head/Live 关系、版本历史、版本对比、版
 - 设计决策：diff 同时覆盖结构化字段与配置文件文本两个层次
 
 #### 待确认 / 假设
-- 已定：diff 粒度 = 字段级 + 配置文件逐行；入口在 Agent 工作台与版本与回滚抽屉
+- 已定：diff 粒度 = 字段级 + 配置文件逐行（LCS 逐行 diff）；当前有两处对比界面——「版本与回滚」抽屉的「版本对比」Tab（VersionHistory），以及独立的版本对比页（VersionDiff，经详情卡「对比版本」进入）
 - 前提：版本快照需存全量配置（demo 已按此实现）
 
 ---
 
-### Requirement: 版本回滚 🔸MVP
+### Requirement: 版本回滚 🔸MVP（已在 demo 实现）
 **User Story:** 作为项目成员，我希望把 Agent 回滚到某个历史版本，或直接让线上 Live 指向某个历史版本，以便快速撤销有问题的改动。
 
 #### Acceptance Criteria
