@@ -822,39 +822,64 @@ export function Playground({ agents, embedded }) {
     if (API_ON) { loadSvc(); apiCall('/api/published').then(d => { setList(d); if (d[0]) pick(d[0]); }).catch(() => {}); }
     else if (agents[0]) pick({ id: agents[0].id, version: agents[0].version });
   }, []);
+  // 视觉规范：模型名/参数/版本号 → 等宽字体码片（#FAFAFB 底 + 发丝描边），框架/状态才用 Tag
+  const codeChip = { fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 11.5, color: '#5A5C6B', background: '#FAFAFB', border: '1px solid #F1F1F5', borderRadius: 6, padding: '0 6px', lineHeight: '18px', display: 'inline-flex', alignItems: 'center', flexShrink: 0 };
+  const agentSelect = list.length > 0 ? (
+    <ConfigProvider theme={{ components: { Select: { activeBorderColor: ACCENT, hoverBorderColor: '#B9BBF5', activeOutlineColor: 'rgba(79,70,229,0.10)', optionSelectedBg: '#F0F1FE', optionSelectedColor: '#17171C' } } }}>
+      <Select
+        value={sel ? sel.id : undefined}
+        placeholder="选择 Agent"
+        style={{ width: 280 }}
+        popupMatchSelectWidth={false}
+        optionLabelProp="label"
+        onChange={id => { const it = list.find(x => x.id === id); if (it) pick(it); }}
+        options={list.map(it => ({
+          value: it.id,
+          title: it.name,
+          label: (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: '100%' }}>
+              <span style={{ fontWeight: 600, color: '#17171C', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.name}</span>
+              <span style={codeChip}>v{it.version}</span>
+            </span>
+          ),
+          children: (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 2px', minWidth: 320 }}>
+              <span style={{ fontWeight: 600, color: '#17171C' }}>{it.name}</span>
+              <span style={codeChip}>v{it.version}</span>
+              <span style={pill('#EEF0FF', '#4F46E5')}>{fwName(it.framework)}</span>
+              <span style={{ ...codeChip, marginLeft: 'auto', color: '#8A8C99' }}>{it.model}</span>
+            </div>
+          ),
+        }))}
+        optionRender={opt => opt.data.children}
+      />
+    </ConfigProvider>
+  ) : null;
+  const agentPicker = agentSelect && (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+      <span style={{ fontSize: 13, color: '#8A8C99' }}>Agent</span>{agentSelect}
+    </div>
+  );
   return (
     <div>
-      {!embedded && (
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 20, fontWeight: 750, letterSpacing: -0.3, color: '#17171C' }}>Playground</div>
-          <Text style={{ color: '#8A8C99', fontSize: 13.5 }}>与已发布的 Agent 对话{API_ON ? '' : '（未连后端 · 本地 mock）'}</Text>
-        </div>
-      )}
+      {!embedded
+        ? (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 750, letterSpacing: -0.3, color: '#17171C' }}>Playground</div>
+              <Text style={{ color: '#8A8C99', fontSize: 13.5 }}>与已发布的 Agent 对话{API_ON ? '' : '（未连后端 · 本地 mock）'}</Text>
+            </div>
+            {agentPicker}
+          </div>
+        )
+        : (agentPicker && <div style={{ marginBottom: 12 }}>{agentPicker}</div>)}
       {list.length === 0
         ? <div style={{ border: '1px dashed #DEDEE3', borderRadius: 8, padding: '40px 0', background: '#FCFCFD' }}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有已发布的 Agent —— 去详情或编辑页点「发布」" /></div>
-        : <div>
-          <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13, color: '#5A5C6B', fontWeight: 600 }}>Agent</span>
-            <Select
-              value={sel ? sel.id : undefined}
-              placeholder="选择一个已发布的 Agent"
-              style={{ minWidth: 360 }}
-              optionLabelProp="label"
-              onChange={id => { const it = list.find(x => x.id === id); if (it) pick(it); }}
-              options={list.map(it => ({
-                value: it.id,
-                label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ fontWeight: 600, color: '#17171C' }}>{it.name}</span><span style={pill('#F1F1F4', '#5A5C6B')}>v{it.version}</span><span style={pill('#EEF0FF', '#4F46E5')}>{fwName(it.framework)}</span></span>,
-                title: it.name,
-                children: <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 0' }}><span style={{ fontWeight: 600, color: '#17171C' }}>{it.name}</span><span style={pill('#F1F1F4', '#5A5C6B')}>v{it.version}</span><span style={pill('#EEF0FF', '#4F46E5')}>{fwName(it.framework)}</span><span style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 11, color: '#8A8C99' }}>{it.model}</span></div>,
-              }))}
-              optionRender={opt => opt.data.children}
-            />
-          </div>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+        : <div style={{ display: 'flex', gap: 16, alignItems: 'stretch', height: 'calc(100vh - 200px)' }}>
             {cfg && (
-              <div style={{ width: 184, flexShrink: 0, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 170px)' }}>
+              <div style={{ width: 184, flexShrink: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <Button size="small" icon={<PlusOutlined />} onClick={() => sel && newPgSession(sel.id, { reuseEmpty: true })} style={{ marginBottom: 8 }}>新会话</Button>
-                <div style={{ flex: 1, overflow: 'auto' }}>
+                <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
                   {pgSessions.length === 0
                     ? <div style={{ textAlign: 'center', color: '#C2C4CE', fontSize: 12, padding: '16px 0' }}>暂无会话</div>
                     : pgSessions.map(s => (
@@ -871,7 +896,7 @@ export function Playground({ agents, embedded }) {
                 </div>
               </div>
             )}
-            <div style={{ flex: 1, minWidth: 0, background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, padding: 16, height: 'calc(100vh - 170px)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flex: 1, minWidth: 0, background: '#fff', border: '1px solid #EBEBF1', borderRadius: 8, padding: 16, height: '100%', display: 'flex', flexDirection: 'column' }}>
               {cfg ? <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                   <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
                     {cfg.name} <span style={pill('#EEF0FF', '#4F46E5')}>{fwName(cfg.framework)}</span>
@@ -886,8 +911,7 @@ export function Playground({ agents, embedded }) {
                 </div>
                 : <Empty description="在上方选择一个 Agent 开始对话" />}
             </div>
-          </div>
-        </div>}
+          </div>}
     </div>
   );
 }
