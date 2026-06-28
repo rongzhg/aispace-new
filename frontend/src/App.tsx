@@ -167,7 +167,6 @@ function Root() {
         <div className="agent-avatar"><RobotOutlined style={{ fontSize: 15 }} /></div>
         <div style={{ minWidth: 0 }}>
           <div className="agent-name-main">{t}</div>
-          <div className="agent-name-sub">{r.desc || '暂无描述'}</div>
           <div className="agent-name-sub"><span className="compact-code">{r.id}</span> · {fwName(r.framework)} · 更新 {(r.updatedAt || '').slice(5)}</div>
         </div>
       </div>) },
@@ -335,7 +334,7 @@ function App() {
       components: {
         Layout: { bodyBg: '#F6F7F9' },
         Menu: { itemBg: 'transparent', itemSelectedBg: '#E8EEF7', itemSelectedColor: '#0F172A', itemHeight: 34, itemBorderRadius: 5, itemColor: '#475569', itemHoverBg: '#EFF3F8', iconSize: 15 },
-        Table: { headerBg: '#F8FAFC', headerColor: '#64748B', headerSplitColor: 'transparent', borderColor: '#E2E8F0', rowHoverBg: '#F8FAFC', cellPaddingBlock: 7, cellPaddingInline: 12, fontSize: 12.5 },
+        Table: { headerBg: '#F8FAFC', headerColor: '#64748B', headerSplitColor: 'transparent', borderColor: '#E2E8F0', rowHoverBg: '#F8FAFC', cellPaddingBlock: 5, cellPaddingInline: 12, fontSize: 12.5 },
         Button: { primaryShadow: 'none', defaultShadow: 'none', fontWeight: 600, controlHeight: 30, paddingInline: 12 },
         Input: { activeShadow: '0 0 0 2px rgba(37,99,235,0.12)' },
         Segmented: { itemSelectedBg: '#fff', trackBg: '#EAEFF5', itemSelectedColor: '#0F172A', itemColor: '#475569' },
