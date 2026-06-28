@@ -21,6 +21,7 @@ Claude Managed Agent 平台的功能 spec，按模块拆分。每份遵循 [../s
 | K | [K-project-workspace.md](./K-project-workspace.md) | 项目空间增查、成员（多 Owner）、切换 | ✅模型 + 🔸切换器；创建限管理员 |
 | L | [L-assistant.md](./L-assistant.md) | Chat 统一入口：默认通用 agent + slash 选内置 skill（/agent-creator、/skill-creator）| 🔸阶段一已实现 + ⬜需求闭环/完整工具调用 |
 | M | [M-agent-api.md](./M-agent-api.md) | **Agent 调用契约与会话（Managed Agent 标准：Agent+Environment+Session）**——统一会话(服务端有状态)、事件驱动、稳定寻址 | 🔸Phase 1 已落地 + ⬜Phase 2–4 |
+| N | [N-session-console.md](./N-session-console.md) | **会话 Tab（会话控制台）**——按「创建人」聚合我创建的 Agent（L1/L2/L3）的全部会话、明细回看、检索过滤、全量归集 | 🔸MVP 列表/明细 + ⬜外部直连归集/全文检索 |
 
 状态图例：✅已确认（多源自原始 spec）· 🔸MVP（demo 建议做）· ⬜后续 · ❓待确认（spec 内逐条标注）
 
