@@ -4,6 +4,20 @@
 
 当前处于**产品设计 + 前端 demo** 阶段，采用 spec-driven + vibe coding 协作。
 
+## 一键启动
+
+从一个**已加载 `~/.zshrc` 的交互终端**（保证 `ANTHROPIC_API_KEY` 在环境里）运行：
+
+```bash
+./start.sh
+```
+
+- 后端 → http://localhost:8000 （API 文档 `/docs`，健康 `/api/health`）
+- 前端 → http://localhost:5173
+- Ctrl-C 同时停掉两端；首次会自动建后端 venv / 装前端依赖。
+
+> ⚠️ **必须**带有效 `ANTHROPIC_API_KEY` 启动——本机 headless 的 `claude -p` 读不到订阅登录，缺 key 时所有 Claude Code agent 会报「未登录」。详见 [技术文档/运维排障.md](./技术文档/运维排障.md)。
+
 ## 从哪开始
 
 | 你是… | 看这里 |
