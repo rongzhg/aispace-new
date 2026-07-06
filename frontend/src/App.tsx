@@ -8,14 +8,14 @@ import {
   PlusOutlined, EditOutlined, DeleteOutlined, LockOutlined, SearchOutlined, AppstoreOutlined,
   UserOutlined, TeamOutlined, SendOutlined, ReloadOutlined, ArrowLeftOutlined, DownOutlined,
   RobotOutlined, ToolOutlined, BulbOutlined, CheckOutlined, MessageOutlined, FileTextOutlined,
-  SettingOutlined, CloseOutlined, ThunderboltOutlined, SwapOutlined, BranchesOutlined, ExperimentOutlined,
+  SettingOutlined, CloseOutlined, ThunderboltOutlined, SwapOutlined, BranchesOutlined, ExperimentOutlined, ClockCircleOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined,
 } from "@ant-design/icons";
 const { Sider, Content } = Layout;
 const { Text } = Typography;
 import { ACCENT, FRAMEWORKS, PROVIDERS, MODEL_PARAMS, TOOLS, SKILLS, TEMPLATES, fwName, ISOLATIONS, isoName, INIT_WORKSPACES, td, now, mkAgent, INIT_AGENTS } from "./config";
 import { apiCall, API_ON, setApiOn } from "./api";
-import { AgentBuilder, AgentDetail, AgentWorkbench, VersionDiff, MembersPanel, ChatPanel, Playground, SkillMarket, McpMarket, DeployPanel, EnvPanel, SessionConsole, pill, antMsg, setAntMsg } from "./components";
+import { AgentBuilder, AgentDetail, AgentWorkbench, VersionDiff, MembersPanel, ChatPanel, Playground, SkillMarket, McpMarket, SchedulePanel, EnvPanel, SessionConsole, pill, antMsg, setAntMsg } from "./components";
 import "./agent-redesign.css";
 
 let AGENT_SEQ = 100;
@@ -36,6 +36,7 @@ function Root() {
   const [newWsName, setNewWsName] = useState('');
   const [apiMode, setApiMode] = useState(false);
   const [services, setServices] = useState([]);
+  const [sessionFocus, setSessionFocus] = useState(null); // 定时任务 run → 会话明细深链
 
   const loadWorkspaces = () => apiCall('/api/workspaces').then(d => { setWorkspaces(d); return d; }).catch(() => {});
   const loadAgents = wsId => apiCall(`/api/agents?ws=${wsId}`).then(setAgents).catch(() => {});
@@ -186,7 +187,7 @@ function Root() {
 
   const inBuilder = view.name === 'create' || view.name === 'edit' || view.name === 'detail';
   const sectionLabel = nav === 'chat' ? 'Chat'
-    : nav === 'deploy' ? '部署'
+    : nav === 'deploy' ? '定时任务'
     : nav === 'playground' ? 'Playground'
     : nav === 'session' ? '会话'
     : nav === 'skill' ? '技能'
@@ -224,7 +225,7 @@ function Root() {
           items={[
             { key: 'chat', icon: <MessageOutlined />, label: 'Chat' },
             { key: 'agent', icon: <RobotOutlined />, label: 'Agent' },
-            { key: 'deploy', icon: <ThunderboltOutlined />, label: '部署' },
+            { key: 'deploy', icon: <ClockCircleOutlined />, label: '定时任务' },
             { key: 'playground', icon: <ExperimentOutlined />, label: 'Playground' },
             { key: 'session', icon: <MessageOutlined />, label: '会话' },
             { key: 'skill', icon: <BulbOutlined />, label: 'Skill' },
@@ -315,9 +316,9 @@ function Root() {
           })()}
           {nav === 'agent' && view.name === 'diff' && <VersionDiff agent={agents.find(a => a.id === view.agent.id) || view.agent} onBack={() => setView({ name: 'detail', agent: view.agent })} />}
           {nav === 'chat' && <ChatPanel curWs={curWs} isAdmin={isPlatformAdmin} onChanged={() => { if (API_ON) { loadWorkspaces(); loadAgents(curWs); } }} />}
-          {nav === 'deploy' && <DeployPanel agents={visibleAgents} services={services} onServiceChanged={() => { if (API_ON) { loadServices(); loadAgents(curWs); } }} />}
+          {nav === 'deploy' && <SchedulePanel agents={visibleAgents} onOpenSession={sid => { setSessionFocus(sid); setNav('session'); }} />}
           {nav === 'playground' && <Playground agents={visibleAgents} />}
-          {nav === 'session' && <SessionConsole me={'u0'} onGoAgents={() => { setNav('agent'); setView({ name: 'list' }); }} />}
+          {nav === 'session' && <SessionConsole me={'u0'} onGoAgents={() => { setNav('agent'); setView({ name: 'list' }); }} initialOpenId={sessionFocus} onOpened={() => setSessionFocus(null)} />}
           {nav === 'skill' && <SkillMarket wsId={curWs} me={(ws && (ws.members.find(m => m.id === 'u0') || {}).name) || 'Helena（我）'} />}
           {nav === 'mcp' && <McpMarket wsId={curWs} />}
           {nav === 'env' && <EnvPanel />}

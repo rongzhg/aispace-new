@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import {
   ConfigProvider, App as AntApp, Layout, Menu, Button, Table, Input, Select, Card, Tabs,
   Drawer, Checkbox, Tag, Collapse, Descriptions, Modal, Tooltip, Avatar, Dropdown,
-  Slider, InputNumber, Popconfirm, Popover, Space, Typography, Empty, Segmented, Divider, theme, message, Spin, Badge, Tree, Upload, Switch, Pagination,
+  Slider, InputNumber, Popconfirm, Popover, Space, Typography, Empty, Segmented, Divider, theme, message, Spin, Badge, Tree, Upload, Switch, Pagination, DatePicker,
 } from "antd";
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, LockOutlined, SearchOutlined, AppstoreOutlined,
@@ -10,7 +10,9 @@ import {
   RobotOutlined, ToolOutlined, BulbOutlined, CheckOutlined, MessageOutlined, FileTextOutlined,
   SettingOutlined, CloseOutlined, ThunderboltOutlined, SwapOutlined, BranchesOutlined,
   InboxOutlined, FolderOutlined, FileOutlined, EyeOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
+  ClockCircleOutlined, PlayCircleOutlined, HistoryOutlined,
 } from "@ant-design/icons";
+import dayjs from "dayjs";
 const { Sider, Content } = Layout;
 const { Text } = Typography;
 import { ACCENT, FRAMEWORKS, PROVIDERS, MODEL_PARAMS, TOOLS, SKILLS, TEMPLATES, fwName, ISOLATIONS, isoName, TENANT_NOTE, INIT_WORKSPACES, td, now, mkAgent, INIT_AGENTS } from "./config";
@@ -1186,7 +1188,8 @@ export function Playground({ agents, embedded }) {
   const [svcMap, setSvcMap] = useState({});      // agentId → 运行态（隔离级别 / local|cloud / status）
   const loadSvc = () => { if (API_ON) apiCall('/api/services').then(d => setSvcMap(Object.fromEntries((d || []).map(s => [s.agentId || s.id, s])))).catch(() => {}); };
   // 会话管理（统一 /api/sessions，按 agent 过滤）——切 tab 回来即由此重载、回显
-  const loadPgSessions = async (aid) => { try { const l = await apiCall(`/api/sessions?agent=${aid}`); setPgSessions(l || []); return l || []; } catch { return []; } };
+  // Playground 只展示交互式会话；定时任务产生的会话（source=schedule）不在此列出，仅在「会话」tab 可见
+  const loadPgSessions = async (aid) => { try { const l = await apiCall(`/api/sessions?agent=${aid}&exclude_source=schedule`); setPgSessions(l || []); return l || []; } catch { return []; } };
   const switchPgSession = async (sid) => { try { const s = await apiCall(`/api/sessions/${sid}`); setPsid(sid); setPgMsgs(s.messages || []); } catch (e) { antMsg.error(e.message); } };
   const pgSessionsRef = React.useRef([]);
   pgSessionsRef.current = pgSessions;
@@ -1983,12 +1986,240 @@ export function Market({ wsId, wsName, me }) {
 }
 
 /* ================= 部署（发布与运行控制台：发起部署 + 版本钉选 × 环境 tier + 稳定地址 + 运维）================= */
-export function DeployPanel({ agents, services, onServiceChanged }) {
+/* 抽屉左右拖拽调宽：返回受控 width + 拖拽起手；把手渲染在 Drawer 同级、用 fixed 定位，
+   不受 Drawer 自身动画 transform 影响，拖左加宽、拖右变窄（右侧抽屉）。 */
+function useDrawerResize(initial = 600) {
+  const [width, setWidth] = useState(initial);
+  const startResize = e => {
+    e.preventDefault();
+    const onMove = ev => setWidth(Math.min(window.innerWidth - 180, Math.max(360, window.innerWidth - ev.clientX)));
+    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); document.body.style.userSelect = ''; };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.body.style.userSelect = 'none';
+  };
+  return { width, startResize };
+}
+function DrawerResizer({ open, width, onStart }) {
+  if (!open) return null;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '120px 24px', textAlign: 'center' }}>
-      <ThunderboltOutlined style={{ fontSize: 40, color: '#C7C8D2', marginBottom: 18 }} />
-      <div style={{ fontSize: 20, fontWeight: 750, letterSpacing: -0.3, color: '#17171C', marginBottom: 8 }}>功能还在设计</div>
-      <Text style={{ color: '#8A8C99', fontSize: 13.5 }}>部署能力正在设计中，敬请期待</Text>
+    <div onMouseDown={onStart} title="拖拽调整宽度"
+      style={{ position: 'fixed', top: 0, bottom: 0, left: `calc(100vw - ${width}px - 4px)`, width: 10, cursor: 'col-resize', zIndex: 1002, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ width: 4, height: 42, borderRadius: 3, background: '#C7C8D2' }} />
+    </div>
+  );
+}
+
+/* ================= 定时任务（deployment = 可触发的任务模板，对齐 Claude managed agents）================= */
+// 每次触发（cron 到点 / 手动「立即运行」）= 后端创建一条 session（source=schedule）跑完整一轮 + 写 run 台账；
+// 完整运行过程与结果 = 该 session 本身 → 「查看会话」深链到会话 tab（单一事实来源，不在此复制会话视图）。
+
+const CRON_PRESETS = [
+  { label: '每 5 分钟', value: '*/5 * * * *' },
+  { label: '每小时整点', value: '0 * * * *' },
+  { label: '每天 09:00', value: '0 9 * * *' },
+  { label: '每周一 09:00', value: '0 9 * * 1' },
+  { label: '每月 1 号 09:00', value: '0 9 1 * *' },
+  { label: '自定义 cron…', value: '__custom' },
+];
+const _schedText = d => d.scheduleType === 'cron'
+  ? ((CRON_PRESETS.find(p => p.value === d.cronExpr) || {}).label || d.cronExpr)
+  : d.scheduleType === 'once' ? `一次性 · ${d.runAt || ''}` : '仅手动';
+const _trigText = t => t === 'manual' ? '手动' : t === 'once' ? '一次性' : '定时';
+const _durText = r => {
+  if (!r || !r.startedAt || !r.finishedAt) return '';
+  const s = Math.max(0, Math.round((new Date(r.finishedAt.replace(' ', 'T')) - new Date(r.startedAt.replace(' ', 'T'))) / 1000));
+  return s >= 60 ? `${Math.floor(s / 60)}m${s % 60}s` : `${s}s`;
+};
+// 视觉规范（产品文档/视觉规范.dc.html，authoritative）语义标签色
+const _runPill = st => st === 'succeeded' ? <span style={pill('#ECFDF5', '#047857')}>✓ 成功</span>
+  : st === 'failed' ? <span style={pill('#FEE2E2', '#DC2626')}>✕ 失败</span>
+  : st === 'skipped' ? <span style={pill('#F1F5F9', '#64748B')}>⊘ 跳过</span>
+  : <span style={pill('#FFFBEB', '#B45309')}>◌ 运行中</span>;
+// 中性药丸（版本策略 / 环境 / 触发方式）——规范中性面 #F1F5F9 / ink-650 #475569
+const _neuPill = txt => <span style={pill('#F1F5F9', '#475569')}>{txt}</span>;
+
+export function SchedulePanel({ agents, onOpenSession }) {
+  const [data, setData] = useState({ items: [], todayRuns: 0, todayFailed: 0 });
+  const [loading, setLoading] = useState(false);
+  const [q, setQ] = useState('');              // 按任务名 / Agent 搜索
+  const [fEnabled, setFEnabled] = useState('ALL'); // 启用状态过滤
+  const [dm, setDm] = useState(null);          // 新建/编辑表单 {id?, name, agentId, versionPolicy, isolation, prompt, scheduleType, cronExpr/preset, runAt}
+  const [saving, setSaving] = useState(false);
+  const [hist, setHist] = useState(null);      // 运行历史抽屉 {dep, runs}
+  const load = () => { if (!API_ON) return; apiCall('/api/deployments').then(setData).catch(() => {}); };
+  React.useEffect(() => { setLoading(true); Promise.resolve(load()).finally(() => setLoading(false)); const t = setInterval(load, 10000); return () => clearInterval(t); }, []);
+  // 历史抽屉打开期间 5s 轮询（手动触发是异步的，要看到 running→succeeded 流转）
+  const loadRuns = async dep => { try { const rs = await apiCall(`/api/deployments/${dep.id}/runs`); setHist(h => h && h.dep.id === dep.id ? { ...h, runs: rs } : h); } catch {} };
+  React.useEffect(() => { if (!hist) return; loadRuns(hist.dep); const t = setInterval(() => loadRuns(hist.dep), 5000); return () => clearInterval(t); }, [hist && hist.dep.id]);
+
+  const dmAgent = dm && (agents || []).find(a => a.id === dm.agentId);
+  const openNew = () => setDm({ name: '', agentId: (agents || [])[0] && agents[0].id, versionPolicy: 'latest', isolation: 'L3', prompt: '', scheduleType: 'cron', preset: '0 9 * * *', cronExpr: '0 9 * * *', runAt: null });
+  const openEdit = d => setDm({ id: d.id, name: d.name, agentId: d.agentId, versionPolicy: d.versionPolicy, isolation: d.isolation, prompt: d.prompt, scheduleType: d.scheduleType, preset: CRON_PRESETS.some(p => p.value === d.cronExpr) ? d.cronExpr : '__custom', cronExpr: d.cronExpr || '', runAt: d.runAt });
+  const save = async () => {
+    if (!dm.name || !dm.name.trim()) { antMsg.warning('请填任务名'); return; }
+    if (!dm.agentId) { antMsg.warning('请选 Agent'); return; }
+    if (dm.scheduleType === 'cron' && !(dm.cronExpr || '').trim()) { antMsg.warning('请填 cron 表达式'); return; }
+    if (dm.scheduleType === 'once' && !dm.runAt) { antMsg.warning('请选运行时刻'); return; }
+    const body = JSON.stringify({ name: dm.name.trim(), agentId: dm.agentId, versionPolicy: dm.versionPolicy, isolation: dm.isolation, prompt: dm.prompt || '', scheduleType: dm.scheduleType, cronExpr: dm.scheduleType === 'cron' ? dm.cronExpr.trim() : null, runAt: dm.scheduleType === 'once' ? dm.runAt : null });
+    setSaving(true);
+    try {
+      await apiCall(dm.id ? `/api/deployments/${dm.id}` : '/api/deployments', { method: dm.id ? 'PATCH' : 'POST', body });
+      antMsg.success(dm.id ? '已保存' : '已创建定时任务'); setDm(null); load();
+    } catch (e) { antMsg.error(e.message); } finally { setSaving(false); }
+  };
+  const toggle = async d => { try { await apiCall(`/api/deployments/${d.id}`, { method: 'PATCH', body: JSON.stringify({ enabled: !d.enabled }) }); load(); } catch (e) { antMsg.error(e.message); } };
+  const del = async d => { try { await apiCall(`/api/deployments/${d.id}`, { method: 'DELETE' }); antMsg.success('已删除（运行台账保留）'); load(); } catch (e) { antMsg.error(e.message); } };
+  const runNow = async d => {
+    try { await apiCall(`/api/deployments/${d.id}/run`, { method: 'POST' }); antMsg.success('已触发，正在运行…'); setHist({ dep: d, runs: null }); load(); }
+    catch (e) { antMsg.error(e.message); }
+  };
+
+  const total = (data.items || []).length;
+  const items = (data.items || []).filter(d =>
+    (!q || (d.name || '').toLowerCase().includes(q.toLowerCase()) || (d.agentName || '').toLowerCase().includes(q.toLowerCase())) &&
+    (fEnabled === 'ALL' || (fEnabled === 'on' ? d.enabled : !d.enabled)));
+  const { width: histW, startResize: histResize } = useDrawerResize(620);
+  return (
+    <div>
+      <style>{`.sched-row{transition:background .12s ease}.sched-row:hover{background:#F8FAFC}`}</style>
+
+      {/* 页头 · 规范 §03/§08：22px/760 标题 + 12.5px 说明 + 单一主入口 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 760, letterSpacing: -0.2, color: '#0F172A', lineHeight: 1.15 }}>定时任务</div>
+          <div style={{ marginTop: 5, color: '#64748B', fontSize: 12.5 }}>把 Agent 配置成按计划自动运行的任务：到点触发（或手动「立即运行」）都会产生一次运行与对应会话，全程可回看。</div>
+        </div>
+        <Button type="primary" icon={<PlusOutlined />} disabled={!API_ON || (agents || []).length === 0} onClick={openNew}>新建定时任务</Button>
+      </div>
+      {!API_ON ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未连后端 · 定时任务需先在本机启动后端" />
+        : loading && total === 0 ? <div style={{ padding: '48px 0', textAlign: 'center' }}><Spin /></div>
+        : total === 0
+        ? <div style={{ border: '1px dashed #DFE3EA', borderRadius: 6, padding: '32px 24px', background: '#F8FAFC', textAlign: 'center' }}>
+            <ClockCircleOutlined style={{ fontSize: 26, color: '#94A3B8', marginBottom: 10 }} />
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>还没有定时任务</div>
+            <div style={{ fontSize: 12.5, color: '#64748B', marginBottom: 16 }}>三步：① 选 Agent 和版本 ② 写任务指令 ③ 定计划（每天 / 每周 / cron），到点自动运行</div>
+            <Button type="primary" icon={<PlusOutlined />} disabled={(agents || []).length === 0} onClick={openNew}>新建定时任务</Button>
+          </div>
+        : (<>
+          {/* 工具栏 · 规范 §04/§05：搜索 + 过滤横排，右侧计数与刷新 */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Input allowClear prefix={<SearchOutlined style={{ color: '#94A3B8' }} />} placeholder="搜索任务名 / Agent" value={q} onChange={e => setQ(e.target.value)} style={{ width: 240 }} />
+            <Segmented value={fEnabled} onChange={setFEnabled}
+              options={[{ label: '全部', value: 'ALL' }, { label: '启用中', value: 'on' }, { label: '已停用', value: 'off' }]} />
+            <div style={{ flex: 1 }} />
+            <Text style={{ color: '#94A3B8', fontSize: 12.5 }}>共 {items.length} 个</Text>
+            <Tooltip title="刷新"><Button type="text" icon={<ReloadOutlined />} onClick={load} /></Tooltip>
+          </div>
+
+          {/* 任务表格 · 规范 §05：表头 #F8FAFC/11px、发丝分割、行内主信息加粗、操作列固定右侧 */}
+          <div style={{ border: '1px solid #DFE3EA', borderRadius: 6, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', fontSize: 11, letterSpacing: 0.3, textTransform: 'uppercase', color: '#64748B', fontWeight: 700, background: '#F8FAFC', padding: '9px 14px', borderBottom: '1px solid #DFE3EA' }}>
+              <div style={{ flex: 1 }}>任务 / Agent</div><div style={{ width: 130 }}>调度</div><div style={{ width: 100 }}>下次运行</div><div style={{ width: 150 }}>上次运行</div><div style={{ width: 54 }}>启用</div><div style={{ width: 190 }} />
+            </div>
+            {items.length === 0
+              ? <div style={{ padding: '28px 0' }}><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的任务" /></div>
+              : items.map(d => (
+                <div key={d.id} className="sched-row" style={{ display: 'flex', alignItems: 'center', padding: '11px 14px', borderBottom: '1px solid #EDF0F4', opacity: d.enabled ? 1 : 0.6 }}>
+                  <div style={{ flex: 1, minWidth: 0, paddingRight: 10 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name}</div>
+                    <div style={{ marginTop: 3, color: '#64748B', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ ..._MONO }}>{d.agentName}</span>
+                      {_neuPill(d.versionPolicy === 'latest' ? '跟随最新' : `钉住 v${(d.versionPolicy || '').split(':')[1] || '?'}`)}
+                      {_neuPill(d.isolation)}
+                    </div>
+                  </div>
+                  <div style={{ width: 130, fontSize: 12, color: '#475569' }}>{_schedText(d)}</div>
+                  <div style={{ width: 100, fontSize: 12, color: '#475569' }}>{d.enabled && d.nextRunAt ? d.nextRunAt.slice(5) : '—'}</div>
+                  <div style={{ width: 150 }}>
+                    {d.lastRun
+                      ? <a onClick={() => setHist({ dep: d, runs: null })} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'inherit' }}>
+                          {_runPill(d.lastRun.status)}<span style={{ fontSize: 11.5, color: '#94A3B8' }}>{_durText(d.lastRun) || (d.lastRun.startedAt || '').slice(5, 16)}</span>
+                        </a>
+                      : <span style={{ fontSize: 12, color: '#94A3B8' }}>未运行过</span>}
+                  </div>
+                  <div style={{ width: 54 }}><Tooltip title={d.enabled ? '已启用 · 点击停用' : '已停用 · 点击启用'}><Switch size="small" checked={!!d.enabled} onChange={() => toggle(d)} /></Tooltip></div>
+                  <div style={{ width: 190, display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                    <Button size="small" icon={<PlayCircleOutlined />} onClick={() => runNow(d)}>立即运行</Button>
+                    <Tooltip title="运行历史"><Button size="small" icon={<HistoryOutlined />} onClick={() => setHist({ dep: d, runs: null })} /></Tooltip>
+                    <Tooltip title="编辑"><Button size="small" icon={<EditOutlined />} onClick={() => openEdit(d)} /></Tooltip>
+                    <Popconfirm title="删除该任务？" description="运行台账与历史会话保留" okText="删除" okButtonProps={{ danger: true }} onConfirm={() => del(d)}>
+                      <Tooltip title="删除"><Button size="small" danger icon={<DeleteOutlined />} /></Tooltip>
+                    </Popconfirm>
+                  </div>
+                </div>
+              ))}
+          </div>
+          <div style={{ marginTop: 12, fontSize: 12, color: '#94A3B8' }}>每次运行的完整过程与结果沉淀为一条会话（来源＝定时任务），在「会话」里可回看全部历史。</div>
+        </>)}
+
+      {/* 新建 / 编辑 · 规范 §05 Modal：圆角 6、标题短、正文直接进入控件 */}
+      <Modal title={dm && dm.id ? `编辑任务 · ${dm.name || ''}` : '新建定时任务'} open={!!dm} onCancel={() => setDm(null)} width={520} destroyOnHidden
+        footer={<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Button onClick={() => setDm(null)}>取消</Button>
+          <Button type="primary" loading={saving} onClick={save}>{dm && dm.id ? '保存' : '创建'}</Button>
+        </div>}>
+        {dm && <div style={{ display: 'flex', flexDirection: 'column', gap: 14, margin: '12px 0 4px' }}>
+          <div><div style={{ fontSize: 12.5, color: '#64748B', fontWeight: 650, marginBottom: 6 }}>任务名</div>
+            <Input value={dm.name} placeholder="如：每日竞品简报" maxLength={40} onChange={e => setDm(v => ({ ...v, name: e.target.value }))} /></div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ flex: 1 }}><div style={{ fontSize: 12.5, color: '#64748B', fontWeight: 650, marginBottom: 6 }}>Agent</div>
+              <Select value={dm.agentId} style={{ width: '100%' }} placeholder="选择 Agent" disabled={!!dm.id}
+                onChange={id => setDm(v => ({ ...v, agentId: id, versionPolicy: 'latest' }))}
+                options={(agents || []).map(a => ({ value: a.id, label: `${a.name}（${fwName(a.framework)}）` }))} /></div>
+            <div style={{ width: 170 }}><div style={{ fontSize: 12.5, color: '#64748B', fontWeight: 650, marginBottom: 6 }}>版本<span style={{ color: '#94A3B8', fontWeight: 400 }}>（运行时解析）</span></div>
+              <Select value={dm.versionPolicy} style={{ width: '100%' }} onChange={vp => setDm(v => ({ ...v, versionPolicy: vp }))}
+                options={[{ value: 'latest', label: '跟随最新' },
+                  ...Array.from({ length: (dmAgent && dmAgent.version) || 0 }, (_, i) => ({ value: `pin:${i + 1}`, label: `钉住 v${i + 1}` }))]} /></div>
+          </div>
+          <div><div style={{ fontSize: 12.5, color: '#64748B', fontWeight: 650, marginBottom: 6 }}>任务指令<span style={{ color: '#94A3B8', fontWeight: 400 }}>（每次运行发给 Agent 的开场消息，支持 {'{{date}}'} {'{{time}}'} {'{{task}}'}）</span></div>
+            <Input.TextArea value={dm.prompt} rows={3} placeholder={'如：汇总 {{date}} 的竞品动态，输出 5 条要点'} onChange={e => setDm(v => ({ ...v, prompt: e.target.value }))} /></div>
+          <div><div style={{ fontSize: 12.5, color: '#64748B', fontWeight: 650, marginBottom: 6 }}>运行环境</div>
+            <Select value={dm.isolation} style={{ width: '100%' }} onChange={iso => setDm(v => ({ ...v, isolation: iso }))}
+              options={ISOLATIONS.map(o => ({ value: o.key, label: `${o.tag} · ${o.name}${o.key === 'L3' ? '（推荐：跑完即焚，最适合定时任务）' : ''}` }))} /></div>
+          <div><div style={{ fontSize: 12.5, color: '#64748B', fontWeight: 650, marginBottom: 6 }}>调度</div>
+            <Segmented block value={dm.scheduleType} onChange={st => setDm(v => ({ ...v, scheduleType: st }))}
+              options={[{ label: '重复（cron）', value: 'cron' }, { label: '一次性', value: 'once' }, { label: '仅手动', value: 'manual' }]} />
+            {dm.scheduleType === 'cron' && <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+              <Select value={dm.preset} style={{ width: 180, flexShrink: 0 }}
+                onChange={p => setDm(v => ({ ...v, preset: p, cronExpr: p === '__custom' ? v.cronExpr : p }))}
+                options={CRON_PRESETS.map(p => ({ value: p.value, label: p.label }))} />
+              <Input value={dm.cronExpr} disabled={dm.preset !== '__custom'} placeholder="分 时 日 月 周，如 30 8 * * 1-5"
+                onChange={e => setDm(v => ({ ...v, cronExpr: e.target.value }))} style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12.5 }} /></div>}
+            {dm.scheduleType === 'once' && <div style={{ marginTop: 8 }}>
+              <DatePicker showTime={{ format: 'HH:mm' }} format="YYYY-MM-DD HH:mm" style={{ width: '100%' }} placeholder="选择运行时刻"
+                value={dm.runAt ? dayjs(dm.runAt) : null} onChange={t => setDm(v => ({ ...v, runAt: t ? t.format('YYYY-MM-DD HH:mm') : null }))} /></div>}
+            {dm.scheduleType === 'manual' && <div style={{ marginTop: 8, fontSize: 12, color: '#94A3B8' }}>不自动触发，仅通过「立即运行」执行。</div>}
+          </div>
+        </div>}
+      </Modal>
+
+      {/* 运行历史 · 规范 §05 Drawer：白底、标题 16/700、内容分区浅描边 */}
+      <DrawerResizer open={!!hist} width={histW} onStart={histResize} />
+      <Drawer open={!!hist} width={histW} onClose={() => setHist(null)} styles={{ header: { borderBottom: '1px solid #EDF0F4' } }}
+        title={hist && <div><div style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>{hist.dep.name} · 运行历史</div>
+          <div style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>{hist.dep.agentName} · {_schedText(hist.dep)} · 每次运行=一条会话，点「查看会话」看完整过程</div></div>}>
+        {hist && (hist.runs === null
+          ? <div style={{ padding: 48, textAlign: 'center' }}><Spin /></div>
+          : (hist.runs || []).length === 0
+          ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有运行记录" />
+          : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {(hist.runs || []).map(r => (
+                <div key={r.id} style={{ border: '1px solid #E2E8F0', borderRadius: 6, padding: '10px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    {_runPill(r.status)}
+                    {_neuPill(_trigText(r.trigger))}
+                    {r.version && _neuPill(`v${r.version}`)}
+                    <span style={{ ..._MONO, fontSize: 12, color: '#64748B' }}>{r.startedAt}</span>
+                    {_durText(r) && <span style={{ fontSize: 12, color: '#94A3B8' }}>耗时 {_durText(r)}</span>}
+                    <span style={{ flex: 1 }} />
+                    {r.sessionId && <Button size="small" onClick={() => { setHist(null); onOpenSession && onOpenSession(r.sessionId); }}>查看会话</Button>}
+                  </div>
+                  {(r.summary || r.error) && <div style={{ marginTop: 7, fontSize: 12.5, lineHeight: 1.55, color: r.error ? '#DC2626' : '#475569', whiteSpace: 'pre-wrap', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>{r.error || r.summary}</div>}
+                </div>
+              ))}
+            </div>)}
+      </Drawer>
     </div>
   );
 }
@@ -2048,7 +2279,7 @@ export function EnvPanel() {
 }
 
 /* ================= 会话控制台（Spec N · 按创建人聚合我创建的 Agent 的全部会话） ================= */
-// 视觉规范：运行环境用中性药丸（与 DeployPanel 一致），隔离差异靠 L1/L2/L3 文本 + 分段过滤区分，不滥用语义色。
+// 视觉规范：运行环境用中性药丸，隔离差异靠 L1/L2/L3 文本 + 分段过滤区分，不滥用语义色。
 const _MONO = { fontFamily: 'ui-monospace,Menlo,monospace' };
 const _envText = (iso, loc) => {
   const where = loc === 'cloud' ? '云端' : '本地';
@@ -2057,15 +2288,22 @@ const _envText = (iso, loc) => {
 const _statusPill = (s) => s === 'active'
   ? <span style={pill('#E9F7EF', '#1E8449')}>● 活跃</span>
   : <span style={pill('#F1F1F4', '#A6A8B4')}>{s || '—'}</span>;
-const _srcText = (s) => s === 'gateway' ? '网关直连' : s === 'cloud-callback' ? '云端回传' : '平台界面';
+// 会话来源枚举（用于「归集来源」显示 + 过滤器）。云端回传（cloud-callback）尚未接通，暂不作为可选项。
+const SESSION_SOURCES = [
+  { value: 'platform', label: '平台界面', desc: '在平台界面里亲手发起的会话：Chat、Playground 对话、Agent 编辑页试跑等' },
+  { value: 'schedule', label: '定时任务', desc: '定时任务到点触发或「立即运行」时，由调度器自动创建的会话' },
+  { value: 'gateway', label: '网关直连', desc: '外部系统绕过平台界面、直连已发布 Agent 的稳定地址，由网关旁路归集回来的会话' },
+];
+const _srcText = (s) => s === 'gateway' ? '网关直连' : s === 'cloud-callback' ? '云端回传' : s === 'schedule' ? '定时任务' : '平台界面';
 
-export function SessionConsole({ me, onGoAgents }) {
+export function SessionConsole({ me, onGoAgents, initialOpenId, onOpened }) {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [facets, setFacets] = useState(null);   // 概览统计/过滤候选（全集，不随过滤变）
   const [loading, setLoading] = useState(false);
   const [fAgent, setFAgent] = useState('');     // 所属 Agent 过滤
   const [fIso, setFIso] = useState('');         // 运行环境过滤 L1/L2/L3
+  const [fSrc, setFSrc] = useState('');         // 来源过滤（平台/定时任务/直连…）
   const [q, setQ] = useState('');               // 关键词输入（标题）
   const [qd, setQd] = useState('');             // 防抖后的关键词（真正打到服务端）
   const [page, setPage] = useState(0);          // 0-based，服务端分页
@@ -2090,12 +2328,13 @@ export function SessionConsole({ me, onGoAgents }) {
     const qs = new URLSearchParams({ scope: 'created', page: String(page), size: String(PAGE_SIZE) });
     if (fAgent) qs.set('agent', fAgent);
     if (fIso) qs.set('isolation', fIso);
+    if (fSrc) qs.set('source', fSrc);
     if (qd) qs.set('q', qd);
     apiCall('/api/sessions?' + qs.toString())
       .then(d => { setRows((d && d.items) || []); setTotal((d && d.total) || 0); if (d && d.facets) setFacets(d.facets); })
       .catch(() => { setRows([]); setTotal(0); })
       .finally(() => setLoading(false));
-  }, [page, fAgent, fIso, qd]);
+  }, [page, fAgent, fIso, fSrc, qd]);
   React.useEffect(() => { load(); }, [load]);
 
   // 关键词防抖：输入停 300ms 才打服务端，并回到第 1 页
@@ -2104,6 +2343,7 @@ export function SessionConsole({ me, onGoAgents }) {
   // 过滤变更回到第 1 页
   const pickAgent = (v) => { setFAgent(v || ''); setPage(0); };
   const pickIso = (v) => { setFIso(v === 'ALL' ? '' : v); setPage(0); };
+  const pickSrc = (v) => { setFSrc(v || ''); setPage(0); };
 
   const agentOptions = useMemo(() =>
     ((facets && facets.agents) || []).map(a => ({ value: a.value, label: `${a.label}（${a.count}）` })),
@@ -2113,8 +2353,10 @@ export function SessionConsole({ me, onGoAgents }) {
     setDLoading(true); setDetail({ loading: true });
     apiCall(`/api/sessions/${id}`).then(d => setDetail(d)).catch(() => setDetail(null)).finally(() => setDLoading(false));
   };
+  // 深链：从「定时任务」的运行台账跳过来时直接打开对应会话明细
+  React.useEffect(() => { if (initialOpenId) { openDetail(initialOpenId); onOpened && onOpened(); } }, [initialOpenId]);
 
-  const hasFilter = !!(qd || fAgent || fIso);
+  const hasFilter = !!(qd || fAgent || fIso || fSrc);
 
   // 抽屉内密集元数据：一个 label-value 对，行内排布
   const meta = (label, val) => (
@@ -2130,6 +2372,7 @@ export function SessionConsole({ me, onGoAgents }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           <span style={{ fontWeight: 600, color: '#17171C', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t || '新对话'}</span>
           {_statusPill(r.status)}
+          {r.source === 'schedule' && <span style={pill('#EEF0FF', '#4F46E5')}><ClockCircleOutlined style={{ fontSize: 10, marginRight: 3 }} />定时任务</span>}
         </div>
       ) },
     { title: '所属 Agent', dataIndex: 'agentName', width: 168, ellipsis: true,
@@ -2164,6 +2407,13 @@ export function SessionConsole({ me, onGoAgents }) {
         <Select allowClear showSearch optionFilterProp="label" placeholder="全部 Agent" style={{ width: 200 }} value={fAgent || undefined} onChange={pickAgent} options={agentOptions} />
         <Segmented value={fIso || 'ALL'} onChange={pickIso}
           options={[{ label: '全部环境', value: 'ALL' }, { label: '共享 L1', value: 'L1' }, { label: '独立 L2', value: 'L2' }, { label: '即用即弃 L3', value: 'L3' }]} />
+        <Select allowClear placeholder="全部来源" style={{ width: 150 }} popupMatchSelectWidth={300} value={fSrc || undefined} onChange={pickSrc}
+          options={SESSION_SOURCES.map(o => ({ value: o.value, label: o.label }))}
+          optionRender={opt => { const o = SESSION_SOURCES.find(s => s.value === opt.value); return (
+            <div style={{ padding: '2px 0' }}>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{o.label}</div>
+              <div style={{ fontSize: 11.5, color: '#8A8C99', whiteSpace: 'normal', lineHeight: 1.45, marginTop: 1 }}>{o.desc}</div>
+            </div>); }} />
         <div style={{ flex: 1 }} />
         <Text style={{ color: '#A6A8B4', fontSize: 12.5 }}>共 {total} 条{hasFilter ? '（已过滤）' : ''}</Text>
         <Tooltip title="刷新"><Button type="text" icon={<ReloadOutlined />} onClick={load} /></Tooltip>

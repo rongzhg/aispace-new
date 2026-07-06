@@ -411,6 +411,25 @@ def init_db():
                 version INTEGER, framework TEXT, isolation TEXT, location TEXT DEFAULT 'local',
                 gateway INTEGER DEFAULT 0, status TEXT, updated_at TEXT
             );
+            CREATE TABLE IF NOT EXISTS deployments (
+                -- 定时任务模板（对齐 Claude managed agents：deployment=agent+env+初始指令+可选 cron）
+                id TEXT PRIMARY KEY, ws_id TEXT, agent_id TEXT, name TEXT,
+                version_policy TEXT DEFAULT 'latest',   -- 'latest'（运行时解析）| 'pin:<n>'（钉住）
+                isolation TEXT DEFAULT 'L3',            -- 定时任务默认 L3 即用即弃
+                prompt TEXT,                            -- 初始 user.message，支持 {{date}}/{{time}}/{{task}}
+                schedule_type TEXT DEFAULT 'manual',    -- manual | once | cron
+                cron_expr TEXT, run_at TEXT,            -- cron 表达式 / 一次性时刻（YYYY-MM-DD HH:MM）
+                next_run_at TEXT, enabled INTEGER DEFAULT 1,
+                creator TEXT, created_at TEXT, updated_at TEXT
+            );
+            CREATE TABLE IF NOT EXISTS runs (
+                -- 运行台账：每次触发（定时/手动）= 一条 run = 一个 session
+                id TEXT PRIMARY KEY, deployment_id TEXT, agent_id TEXT,
+                resolved_version INTEGER, session_id TEXT,
+                trigger_type TEXT,                      -- cron | once | manual
+                status TEXT,                            -- running | succeeded | failed | skipped
+                started_at TEXT, finished_at TEXT, error TEXT, summary TEXT
+            );
             CREATE TABLE IF NOT EXISTS copilot_sessions (
                 id TEXT PRIMARY KEY, user TEXT, title TEXT, claude_sid TEXT,
                 messages TEXT DEFAULT '[]', created_at TEXT, updated_at TEXT
@@ -511,6 +530,11 @@ def init_db():
 
 def now():
     return time.strftime("%Y-%m-%d %H:%M")
+
+
+def now_s():
+    """秒级时间戳（run 台账需要计算秒级耗时；now() 的分钟粒度不够）。"""
+    return time.strftime("%Y-%m-%d %H:%M:%S")
 
 
 def seed():
@@ -1109,7 +1133,9 @@ def publish(aid: str, version: Optional[int] = None, isolation: str = "L1", body
     """把 Agent 物化成本机 Claude Code 工作目录，返回运行命令。
     若带 config（编辑页发布）：有改动则先存为新版本再发布（版本自动 +1）。"""
     a = get_agent(aid)
-    if body and body.config:
+    # 注意：被 Python 直调（调度器/_ensure_agent_service）时 body 默认值是 FastAPI 的 Body 哨兵对象，
+    # 并非 None——用 getattr 防御，否则 'Body' object has no attribute 'config'。
+    if getattr(body, "config", None):
         latest = a["versions"][-1]["config"] if a["versions"] else {}
         changed = any(body.config.get(k) != latest.get(k) for k in VKEYS)
         if changed:
@@ -1621,6 +1647,7 @@ def session_events_stream(sid: str, body: SessionEventIn, ws: Optional[str] = No
 @app.get("/api/sessions")
 def session_list(agent: Optional[str] = None, scope: str = "mine",
                  isolation: Optional[str] = None, q: Optional[str] = None,
+                 source: Optional[str] = None, exclude_source: Optional[str] = None,
                  page: int = 0, size: int = 20,
                  x_user: Optional[str] = Header(None, alias="X-User-Id")):
     """列出会话。
@@ -1632,7 +1659,8 @@ def session_list(agent: Optional[str] = None, scope: str = "mine",
         # LEFT JOIN 纳入无 agents 行的 copilot；可见 = 我创建的 Agent 的会话 OR copilot 本人会话。
         # 先取「我可见全集」（仅受可见性 + 至少 1 轮约束），据此算 facets（统计/过滤候选），
         # 再按 agent/isolation/关键词过滤 + 分页——保证概览与下拉候选不随当前过滤/翻页而变。
-        base_sql = ("SELECT s.id,s.agent_ref,s.title,s.updated_at,s.messages,s.status,s.isolation,s.location,s.initiator,"
+        # s.source 供会话 tab 的「归集来源」标记与过滤（含定时任务 schedule）。
+        base_sql = ("SELECT s.id,s.agent_ref,s.title,s.updated_at,s.messages,s.status,s.isolation,s.location,s.initiator,s.source,"
                     "COALESCE(a.name,'通用助手') AS agent_name "
                     "FROM sessions s LEFT JOIN agents a ON a.id=s.agent_ref "
                     "WHERE ((a.creator=? AND a.deleted=0) OR (s.agent_ref='copilot' AND s.user=?)) "
@@ -1664,15 +1692,17 @@ def session_list(agent: Optional[str] = None, scope: str = "mine",
             "activeSessions": status_facet.get("active", 0),
         }
 
-        # 过滤（agent + isolation + 标题关键词，取交集）
+        # 过滤（agent + isolation + 来源 + 标题关键词，取交集）
         ql = (q or "").lower()
         rows = [(r, msgs) for r, msgs in parsed
                 if (not agent or r["agent_ref"] == agent)
                 and (not isolation or r["isolation"] == isolation)
+                and (not source or (r["source"] or "platform") == source)
                 and (not ql or ql in (r["title"] or "").lower())]
         items = [{"id": r["id"], "agent": r["agent_ref"], "agentName": r["agent_name"],
                   "title": r["title"] or "新对话", "isolation": r["isolation"], "location": r["location"],
-                  "initiator": r["initiator"], "status": r["status"], "updatedAt": r["updated_at"],
+                  "initiator": r["initiator"], "source": r["source"] or "platform",
+                  "status": r["status"], "updatedAt": r["updated_at"],
                   "count": len(msgs), "rounds": _rounds(msgs)} for r, msgs in rows]
         total = len(items)
         start = max(0, page) * max(1, size)
@@ -1683,6 +1713,8 @@ def session_list(agent: Optional[str] = None, scope: str = "mine",
     args = [user]
     if agent:
         sql += " AND agent_ref=?"; args.append(agent)
+    if exclude_source:                     # Playground 借此排除定时任务产生的会话
+        sql += " AND COALESCE(source,'platform')!=?"; args.append(exclude_source)
     sql += " ORDER BY updated_at DESC"
     with db() as c:
         rows = c.execute(sql, args).fetchall()
@@ -2198,6 +2230,302 @@ def remove_installed_mcp(mid: str, ws: str):
     return {"ok": True}
 
 
+# ---------------- 定时任务（spec：部署=可触发的任务模板，对齐 Claude managed agents）----------------
+# deployment = Agent(版本策略) + 环境(isolation) + 初始指令(prompt) + 调度(manual/once/cron)。
+# 每次触发（定时或手动）= 创建一条 session（source='schedule'）驱动一轮执行 + 写一条 run 台账。
+# 版本在**触发时**解析（latest→当时最新；回滚=改钉选，不产生新部署）。并发策略 P0 固定 skip。
+
+def _cron_field(spec, lo, hi):
+    """解析 cron 单字段为允许值集合。支持 * 、逗号列表、a-b 区间、*/n 与 a-b/n 步进。"""
+    vals = set()
+    for part in spec.split(","):
+        part = part.strip()
+        step = 1
+        if "/" in part:
+            part, s = part.split("/", 1)
+            step = int(s)
+        if part in ("*", ""):
+            rng = list(range(lo, hi + 1))
+        elif "-" in part:
+            a, b = part.split("-", 1)
+            rng = list(range(int(a), int(b) + 1))
+        else:
+            v = int(part)
+            rng = list(range(v, hi + 1)) if step > 1 else [v]
+        vals.update(x for x in rng[::step] if lo <= x <= hi + (1 if hi == 6 else 0))
+    if not vals:
+        raise ValueError(f"cron 字段无有效值：{spec}")
+    return vals
+
+
+def cron_next(expr, after_ts=None):
+    """标准 5 字段 cron（分 时 日 月 周）的下次触发时间（datetime，分钟粒度，本地时区）。
+    纯标准库实现（repo 零依赖哲学）；日/周同时限定时按 crontab 惯例取「或」。"""
+    import datetime
+    parts = (expr or "").strip().split()
+    if len(parts) != 5:
+        raise ValueError("cron 表达式需 5 个字段：分 时 日 月 周")
+    mins, hrs = _cron_field(parts[0], 0, 59), _cron_field(parts[1], 0, 23)
+    doms, mons = _cron_field(parts[2], 1, 31), _cron_field(parts[3], 1, 12)
+    dows = {x % 7 for x in _cron_field(parts[4], 0, 7)}          # 0/7 都是周日
+    dom_star, dow_star = parts[2].startswith("*"), parts[4].startswith("*")
+    t = datetime.datetime.fromtimestamp(after_ts or time.time()).replace(second=0, microsecond=0) + datetime.timedelta(minutes=1)
+    hh, mm = sorted(hrs), sorted(mins)
+    for day in range(366 * 4 + 2):                                # 按天迭代，4 年窗口覆盖闰年边界（如 2/29）
+        d0 = t.date() + datetime.timedelta(days=day)
+        if d0.month not in mons:
+            continue
+        dom_ok, dow_ok = d0.day in doms, ((d0.weekday() + 1) % 7) in dows
+        if not ((dom_ok and dow_ok) if (dom_star or dow_star) else (dom_ok or dow_ok)):
+            continue
+        for h in hh:
+            for m in mm:
+                cand = datetime.datetime(d0.year, d0.month, d0.day, h, m)
+                if cand >= t:
+                    return cand
+    raise ValueError("四年内无匹配时间，请检查 cron 表达式")
+
+
+def _dep_next_run(schedule_type, cron_expr, run_at):
+    """算下次触发时刻（'YYYY-MM-DD HH:MM' 或 None=不再自动触发）。once 已过期视为错过（misfire=skip）。"""
+    if schedule_type == "cron" and cron_expr:
+        return cron_next(cron_expr).strftime("%Y-%m-%d %H:%M")
+    if schedule_type == "once" and run_at:
+        return run_at if run_at > now() else None
+    return None
+
+
+class DeploymentIn(BaseModel):
+    wsId: Optional[str] = None
+    agentId: Optional[str] = None
+    name: Optional[str] = None
+    versionPolicy: Optional[str] = None    # 'latest' | 'pin:<n>'
+    isolation: Optional[str] = None
+    prompt: Optional[str] = None
+    scheduleType: Optional[str] = None     # manual | once | cron
+    cronExpr: Optional[str] = None
+    runAt: Optional[str] = None            # 'YYYY-MM-DD HH:MM'
+    enabled: Optional[bool] = None
+
+
+def _dep_row(c, r):
+    """deployment 行 → API 形状（附最近一次 run 概要）。"""
+    last = c.execute("SELECT id,status,trigger_type,started_at,finished_at,session_id,error,resolved_version "
+                     "FROM runs WHERE deployment_id=? ORDER BY started_at DESC LIMIT 1", (r["id"],)).fetchone()
+    a = c.execute("SELECT name,version,framework FROM agents WHERE id=?", (r["agent_id"],)).fetchone()
+    return {"id": r["id"], "wsId": r["ws_id"], "agentId": r["agent_id"],
+            "agentName": (a and a["name"]) or r["agent_id"], "agentHead": a and a["version"],
+            "framework": (a and a["framework"]) or "",
+            "name": r["name"], "versionPolicy": r["version_policy"], "isolation": r["isolation"],
+            "prompt": r["prompt"], "scheduleType": r["schedule_type"], "cronExpr": r["cron_expr"],
+            "runAt": r["run_at"], "nextRunAt": r["next_run_at"], "enabled": bool(r["enabled"]),
+            "createdAt": r["created_at"], "updatedAt": r["updated_at"],
+            "lastRun": last and {"id": last["id"], "status": last["status"], "trigger": last["trigger_type"],
+                                 "startedAt": last["started_at"], "finishedAt": last["finished_at"],
+                                 "sessionId": last["session_id"], "error": last["error"],
+                                 "version": last["resolved_version"]}}
+
+
+@app.post("/api/deployments")
+def deployment_create(body: DeploymentIn, x_user: Optional[str] = Header(None, alias="X-User-Id")):
+    if not body.agentId or not (body.name or "").strip():
+        raise HTTPException(400, "任务名与 Agent 必填")
+    a = get_agent(body.agentId)                                   # 不存在会抛 404
+    st = body.scheduleType or "manual"
+    if st == "cron":
+        if not body.cronExpr:
+            raise HTTPException(400, "cron 表达式必填")
+        try:
+            cron_next(body.cronExpr)
+        except Exception as e:
+            raise HTTPException(400, f"cron 表达式无效：{e}")
+    if st == "once" and not body.runAt:
+        raise HTTPException(400, "一次性任务需指定运行时刻")
+    vp = body.versionPolicy or "latest"
+    if vp.startswith("pin:"):
+        try:
+            int(vp.split(":", 1)[1])
+        except Exception:
+            raise HTTPException(400, "versionPolicy 需为 'latest' 或 'pin:<版本号>'")
+    did = "d" + uuid.uuid4().hex[:12]
+    ts = now()
+    nxt = _dep_next_run(st, body.cronExpr, body.runAt)
+    with db() as c:
+        c.execute("INSERT INTO deployments (id,ws_id,agent_id,name,version_policy,isolation,prompt,"
+                  "schedule_type,cron_expr,run_at,next_run_at,enabled,creator,created_at,updated_at) "
+                  "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                  (did, body.wsId or a.get("wsId"), body.agentId, body.name.strip(), vp,
+                   body.isolation or "L3", body.prompt or "", st, body.cronExpr, body.runAt,
+                   nxt, 1, _copilot_user(x_user), ts, ts))
+        return _dep_row(c, c.execute("SELECT * FROM deployments WHERE id=?", (did,)).fetchone())
+
+
+@app.get("/api/deployments")
+def deployment_list(ws: Optional[str] = None):
+    with db() as c:
+        sql, args = "SELECT * FROM deployments", []
+        if ws:
+            sql += " WHERE ws_id=?"; args.append(ws)
+        rows = c.execute(sql + " ORDER BY created_at DESC", args).fetchall()
+        items = [_dep_row(c, r) for r in rows]
+        today = time.strftime("%Y-%m-%d")
+        st = c.execute("SELECT COUNT(*) AS n, SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS f "
+                       "FROM runs WHERE started_at LIKE ?", (today + "%",)).fetchone()
+    return {"items": items, "todayRuns": st["n"] or 0, "todayFailed": st["f"] or 0}
+
+
+@app.patch("/api/deployments/{did}")
+def deployment_update(did: str, body: DeploymentIn):
+    with db() as c:
+        r = c.execute("SELECT * FROM deployments WHERE id=?", (did,)).fetchone()
+        if not r:
+            raise HTTPException(404, "任务不存在")
+        cur = dict(r)
+        # 局部更新：None=不改
+        for col, val in (("name", body.name and body.name.strip()), ("version_policy", body.versionPolicy),
+                         ("isolation", body.isolation), ("prompt", body.prompt),
+                         ("schedule_type", body.scheduleType), ("cron_expr", body.cronExpr),
+                         ("run_at", body.runAt)):
+            if val is not None:
+                cur[col] = val
+        if body.enabled is not None:
+            cur["enabled"] = 1 if body.enabled else 0
+        if cur["schedule_type"] == "cron" and cur["cron_expr"]:
+            try:
+                cron_next(cur["cron_expr"])
+            except Exception as e:
+                raise HTTPException(400, f"cron 表达式无效：{e}")
+        # 调度相关字段变化 → 重算 next_run_at；停用清空、启用重算
+        cur["next_run_at"] = _dep_next_run(cur["schedule_type"], cur["cron_expr"], cur["run_at"]) if cur["enabled"] else None
+        c.execute("UPDATE deployments SET name=?,version_policy=?,isolation=?,prompt=?,schedule_type=?,"
+                  "cron_expr=?,run_at=?,next_run_at=?,enabled=?,updated_at=? WHERE id=?",
+                  (cur["name"], cur["version_policy"], cur["isolation"], cur["prompt"], cur["schedule_type"],
+                   cur["cron_expr"], cur["run_at"], cur["next_run_at"], cur["enabled"], now(), did))
+        return _dep_row(c, c.execute("SELECT * FROM deployments WHERE id=?", (did,)).fetchone())
+
+
+@app.delete("/api/deployments/{did}")
+def deployment_delete(did: str):
+    """删除任务模板；runs 台账保留（历史 session 也不动）。"""
+    with db() as c:
+        c.execute("DELETE FROM deployments WHERE id=?", (did,))
+    return {"ok": True}
+
+
+@app.get("/api/deployments/{did}/runs")
+def deployment_runs(did: str, size: int = 50):
+    with db() as c:
+        rows = c.execute("SELECT * FROM runs WHERE deployment_id=? ORDER BY started_at DESC LIMIT ?",
+                         (did, max(1, min(size, 200)))).fetchall()
+    return [{"id": r["id"], "status": r["status"], "trigger": r["trigger_type"],
+             "version": r["resolved_version"], "sessionId": r["session_id"],
+             "startedAt": r["started_at"], "finishedAt": r["finished_at"],
+             "error": r["error"], "summary": r["summary"]} for r in rows]
+
+
+def _fire_deployment(d, trigger_type):
+    """执行一次任务：解析版本 → 按任务的版本+隔离确保服务 → 建 session(source=schedule) → 跑 prompt → 记台账。
+    在工作线程里跑（调度 tick 与 HTTP 请求都不阻塞）。异常一律落 run.error，不上抛。"""
+    rid = "r" + uuid.uuid4().hex[:12]
+    aid, user = d["agent_id"], (d.get("creator") or "u0")
+    with db() as c:
+        # 并发策略 P0=skip：该任务上一次还没跑完 → 记一条 skipped 台账，让「为什么没跑」可见
+        if c.execute("SELECT 1 FROM runs WHERE deployment_id=? AND status='running'", (d["id"],)).fetchone():
+            c.execute("INSERT INTO runs (id,deployment_id,agent_id,trigger_type,status,started_at,finished_at,error) "
+                      "VALUES (?,?,?,?,?,?,?,?)",
+                      (rid, d["id"], aid, trigger_type, "skipped", now_s(), now_s(), "上一次运行尚未结束（并发策略=跳过）"))
+            return
+        c.execute("INSERT INTO runs (id,deployment_id,agent_id,trigger_type,status,started_at) VALUES (?,?,?,?,?,?)",
+                  (rid, d["id"], aid, trigger_type, "running", now_s()))
+    try:
+        a = get_agent(aid)
+        vp = d.get("version_policy") or "latest"
+        ver = int(vp.split(":", 1)[1]) if vp.startswith("pin:") else a["version"]   # 版本在触发时解析
+        publish(aid, version=ver, isolation=d.get("isolation") or "L3")             # 单主实例：不一致则替换
+        for _ in range(90):                                       # 云端（L2/L3）异步部署 → 等就绪，最长 3 分钟
+            svc = SERVICES.get(aid) or {}
+            if svc.get("status") != "deploying":
+                break
+            time.sleep(2)
+        if (SERVICES.get(aid) or {}).get("status") == "failed":
+            raise RuntimeError(f"服务部署失败：{(SERVICES.get(aid) or {}).get('error', '')}")
+        sid = "s" + uuid.uuid4().hex[:12]
+        iso, loc = _agent_runtime_meta(aid)
+        ts = now()
+        with db() as c:
+            c.execute("INSERT INTO sessions (id,user,agent_ref,agent_version,title,claude_sid,messages,status,"
+                      "created_at,updated_at,isolation,location,initiator,source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                      (sid, user, aid, ver, f"{d['name']} · {ts[5:]}", None, "[]", "active", ts, ts, iso, loc, user, "schedule"))
+            c.execute("UPDATE runs SET session_id=?, resolved_version=? WHERE id=?", (sid, ver, rid))
+        msg = ((d.get("prompt") or "").replace("{{date}}", time.strftime("%Y-%m-%d"))
+               .replace("{{time}}", time.strftime("%H:%M")).replace("{{task}}", d.get("name") or ""))
+        r = _session_event(user, sid, aid, None, msg or "开始执行任务", False)
+        reply = (r or {}).get("reply") or ""
+        with db() as c:
+            c.execute("UPDATE runs SET status='succeeded', finished_at=?, summary=? WHERE id=?",
+                      (now_s(), reply.strip()[:200], rid))
+    except Exception as e:
+        err = str(getattr(e, "detail", None) or e)[:300]
+        with db() as c:
+            c.execute("UPDATE runs SET status='failed', finished_at=?, error=? WHERE id=?", (now_s(), err, rid))
+
+
+@app.post("/api/deployments/{did}/run")
+def deployment_run(did: str):
+    """立即运行（手动触发）。异步执行，前端轮询 runs 看结果——run 可能要跑几十秒。"""
+    with db() as c:
+        r = c.execute("SELECT * FROM deployments WHERE id=?", (did,)).fetchone()
+        if not r:
+            raise HTTPException(404, "任务不存在")
+        d = dict(r)
+    threading.Thread(target=_fire_deployment, args=(d, "manual"), daemon=True).start()
+    return {"ok": True, "status": "running"}
+
+
+def _scheduler_loop():
+    """调度主循环：每 20s 扫一次到点任务。先推进 next_run_at 再触发（防同一时刻重复），执行在工作线程。"""
+    while True:
+        try:
+            ts, due = now(), []
+            with db() as c:
+                for r in c.execute("SELECT * FROM deployments WHERE enabled=1 AND next_run_at IS NOT NULL "
+                                   "AND next_run_at<=?", (ts,)).fetchall():
+                    d = dict(r)
+                    if d["schedule_type"] == "cron":
+                        try:
+                            nxt = cron_next(d["cron_expr"]).strftime("%Y-%m-%d %H:%M")
+                        except Exception:
+                            nxt = None
+                        c.execute("UPDATE deployments SET next_run_at=? WHERE id=?", (nxt, d["id"]))
+                    else:                                          # once：跑完即停用
+                        c.execute("UPDATE deployments SET next_run_at=NULL, enabled=0 WHERE id=?", (d["id"],))
+                    due.append(d)
+            for d in due:
+                threading.Thread(target=_fire_deployment, args=(d, d["schedule_type"]), daemon=True).start()
+        except Exception:
+            pass                                                   # 调度循环永不退出
+        time.sleep(20)
+
+
+def _scheduler_start():
+    """启动调度：先对账（misfire=skip：错过的 cron 重算下次、过期 once 直接停用；
+    上次进程死掉遗留的 running run 收尾为 failed），再起 daemon 循环线程。"""
+    with db() as c:
+        for r in c.execute("SELECT * FROM deployments WHERE enabled=1").fetchall():
+            nxt = None
+            try:
+                nxt = _dep_next_run(r["schedule_type"], r["cron_expr"], r["run_at"])
+            except Exception:
+                pass
+            if r["schedule_type"] == "once" and not nxt:
+                c.execute("UPDATE deployments SET next_run_at=NULL, enabled=0 WHERE id=?", (r["id"],))
+            else:
+                c.execute("UPDATE deployments SET next_run_at=? WHERE id=?", (nxt, r["id"]))
+        c.execute("UPDATE runs SET status='failed', finished_at=?, error='后端重启，运行中断' WHERE status='running'",
+                  (now_s(),))
+    threading.Thread(target=_scheduler_loop, daemon=True).start()
+
+
 @app.get("/api/health")
 def health():
     b = claude_bin()
@@ -2208,3 +2536,5 @@ def health():
 init_db()
 # 启动对账：复活上次落库、仍在运行的 agent 服务（重启后无需懒自愈即可稳定路由）
 _reconcile_services()
+# 定时任务调度器：对账 next_run_at / 收尾中断 run，起 daemon 循环
+_scheduler_start()
