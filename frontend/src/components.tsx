@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   ConfigProvider, App as AntApp, Layout, Menu, Button, Table, Input, Select, Card, Tabs,
   Drawer, Checkbox, Tag, Collapse, Descriptions, Modal, Tooltip, Avatar, Dropdown,
@@ -201,7 +201,15 @@ export const msgTime = ts => (ts || '').slice(11, 16);
 
 /* ================= 调试面板 (Spec I · mock) ================= */
 export function DebugPanel({ cfg, chatPath, streamPath, initialMsgs, onTurn }) {
-  const [msgs, setMsgs] = useState(initialMsgs && initialMsgs.length ? initialMsgs : [{ role: 'sys', text: API_ON ? `调试 · 模型 ${cfg.model || '未选'} · 本机 ${cfg.framework === 'OPENCLAW' ? 'OpenClaw Gateway' : 'Claude Code'} 运行` : `调试 · 模型 ${cfg.model || '未选'} · 本地 mock（未连后端）` }]);
+  const sysText = API_ON
+    ? `调试 · 模型 ${cfg.model || '未选'} · 本机 ${cfg.framework === 'OPENCLAW' ? 'OpenClaw Gateway' : 'Claude Code'} 运行`
+    : `调试 · 模型 ${cfg.model || '未选'} · 本地 mock（未连后端）`;
+  const [msgs, setMsgs] = useState(initialMsgs && initialMsgs.length ? initialMsgs : [{ role: 'sys', text: sysText }]);
+  // cfg 异步加载后刷新自动生成的首条 sys 文案（框架/模型）；不动恢复的历史会话
+  useEffect(() => {
+    if (initialMsgs && initialMsgs.length) return;
+    setMsgs(m => (m.length && m[0].role === 'sys') ? [{ ...m[0], text: sysText }, ...m.slice(1)] : m);
+  }, [sysText]);
   const [input, setInput] = useState('');
   const [sid, setSid] = useState(null);
   const [busy, setBusy] = useState(false);

@@ -273,6 +273,10 @@ def oc_invoke(agent: dict, message: str, session_id: Optional[str]):
         # 真实路径：openclaw agent 一次回合，--agent 按 id 路由，--session-id 续多轮
         ocid = _oc_id(agent_id)
         cmd = [b, "agent", "--agent", ocid, "-m", message, "--json"]
+        # 未配对/无 gateway 凭据的环境（如云端 ECS）用嵌入式本地模式跑，绕开 gateway websocket 鉴权；
+        # 本机 Mac 不设该变量，仍走已配对的 gateway 模式。输出形态一致（{payloads,meta}）。
+        if os.environ.get("OPENCLAW_LOCAL"):
+            cmd += ["--local"]
         if session_id:
             cmd += ["--session-id", session_id]
         try:

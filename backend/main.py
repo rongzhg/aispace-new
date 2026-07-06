@@ -909,9 +909,65 @@ def run_claude_code(system_prompt: str, message: str, model: str, session_id: Op
         return {"engine": "claude-code", "reply": out}
 
 
+def run_openclaw_code(cfg: dict, message: str, session_id: Optional[str]):
+    """无头一次性跑 OpenClaw（试跑「当前配置」用）：物化 role/agent/user.md 到调试目录，
+    用 --local 嵌入式模式跑，不经共享 Gateway。返回 {engine, reply, session_id?}。
+    与 run_claude_code 对称：未装 openclaw → mock。"""
+    ob = openclaw_bin()
+    if not ob:
+        return {"engine": "mock", "reply": None}
+    workdir = os.path.join(AGENTS_DIR, ".debug-oc")
+    os.makedirs(workdir, exist_ok=True)
+    for fn, content in (cfg.get("files") or {}).items():   # 人设来自工作目录文件
+        if fn in ("role.md", "agent.md", "user.md"):
+            with open(os.path.join(workdir, fn), "w", encoding="utf-8") as f:
+                f.write(content or "")
+    ocid = "as-debug"   # 试跑专用临时 agent id
+    env = os.environ.copy()
+    env["PATH"] = os.path.dirname(ob) + os.pathsep + env.get("PATH", "")
+    try:   # 注册（幂等；已存在会被忽略）
+        subprocess.run([ob, "agents", "add", ocid, "--workspace", workdir, "--non-interactive", "--json"],
+                       capture_output=True, text=True, timeout=60, env=env, stdin=subprocess.DEVNULL)
+    except Exception:
+        pass
+    cmd = [ob, "agent", "--agent", ocid, "-m", message, "--json"]
+    if os.environ.get("OPENCLAW_LOCAL"):   # 未配对环境（云端 ECS）走嵌入式本地模式
+        cmd += ["--local"]
+    if session_id:
+        cmd += ["--session-id", session_id]
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
+                             cwd=workdir, env=env, stdin=subprocess.DEVNULL)
+    except subprocess.TimeoutExpired:
+        return {"engine": "error", "reply": "openclaw 试跑超时（>300s）"}
+    except Exception as e:
+        return {"engine": "error", "reply": str(e)}
+    if res.returncode != 0 and not (res.stdout or "").strip():
+        return {"engine": "error", "reply": (res.stderr or "openclaw 运行失败").strip()[:1000]}
+    try:   # 解析 {payloads,meta}（或包一层 {result:{...}}）
+        d = json.loads((res.stdout or "").strip())
+        if "payloads" not in d and isinstance(d.get("result"), dict):
+            d = d["result"]
+        payloads = d.get("payloads") or []
+        meta = d.get("meta") or {}
+        reply = (payloads[0].get("text") if payloads and isinstance(payloads[0], dict) else "") \
+            or meta.get("finalAssistantVisibleText") or ""
+        sid = (meta.get("agentMeta") or {}).get("sessionId") or session_id
+        return {"engine": "openclaw", "reply": reply, "session_id": sid}
+    except Exception:
+        return {"engine": "openclaw", "reply": (res.stdout or "").strip()}
+
+
 @app.post("/api/agents/{aid}/chat")
 def chat(aid: str, body: ChatIn):
     cfg = body.config if body.config is not None else get_agent(aid)
+    # 按框架分派：OpenClaw agent 用 openclaw 跑，否则用 claude（此前一律走 claude，对 OpenClaw 必 mock）
+    if cfg.get("framework") == "OPENCLAW":
+        r = run_openclaw_code(cfg, body.message, body.session_id)
+        if r.get("engine") == "mock":
+            r["reply"] = (f"（mock · 本机未检测到 openclaw 命令）「{cfg.get('name','Agent')}」"
+                          f"收到：{body.message}")
+        return r
     sys_p = build_system_prompt(cfg)
     r = run_claude_code(sys_p, body.message, cfg.get("model", ""), body.session_id)
     if r.get("engine") == "mock":
