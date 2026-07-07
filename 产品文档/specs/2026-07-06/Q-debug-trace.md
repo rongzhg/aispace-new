@@ -1,8 +1,8 @@
 ---
-name: 调试执行链路与用量展示（思考 / 工具链 / MCP / 子代理 / 用量）
+name: 调试执行链路与用量展示（思考 / 工具链 / MCP / 子代理 / 用量 / Markdown）
 last amended: 2026-07-06
-version: 1
-description: Agent 对话调试中通用展示思考过程、工具调用链路（入参/结果/状态）、MCP 徽标、子代理、图片占位、上下文压缩标记，以及每轮用量脚注（token/成本/耗时/模型/异常停止）——今日增量，作用于 I(试跑/Playground) / L(Chat)，两个 runtime 统一协议
+version: 2
+description: Agent 对话调试中通用展示思考过程、工具调用链路（入参/结果/状态）、MCP 徽标、子代理、图片占位、上下文压缩标记、每轮用量脚注（token/成本/耗时/模型/异常停止），以及 AI 回复的 Markdown 渲染——今日增量，作用于 I(试跑/Playground) / L(Chat)，两个 runtime 统一协议
 ---
 
 # 调试执行链路与用量展示 Feature Specification（2026-07-06 增量）
@@ -123,3 +123,29 @@ description: Agent 对话调试中通用展示思考过程、工具调用链路�
 #### 待确认 / 假设
 - ⬜后续：把消息级「链路 / 时间 / 用量」的样式补入视觉规范 §07（当前已全部用 §02 tokens，但规范文本尚未收录该模式）
 - ❓子代理(Task) headless 不一定 spawn、MCP 徽标需 agent 绑定 MCP、压缩需长会话——展示逻辑已就绪，触发依赖 runtime 与配置
+
+---
+
+### Requirement: AI 回复按 Markdown 渲染 🔸MVP（已实现）
+> 决策：对话页的 AI 回复常含表格、代码、列表、加粗、链接等 Markdown，按业界会话产品（ChatGPT/Claude 等）通行做法**渲染为 GitHub-Flavored Markdown**，而非原样输出标记文本。用户输入保持纯文本，生 HTML 不解析（安全）。
+
+**User Story:** 作为用户，我希望 Agent 回复里的表格、代码块、列表、链接被正确排版，而不是看到一堆 `|`、`#`、反引号原文。
+
+#### Acceptance Criteria
+1. WHERE 对话页（Chat / Playground / Agent 配置调试）的 AI（bot/assistant）回复 系统 SHALL 以 GitHub-Flavored Markdown 渲染：段落、标题、**加粗**/斜体、有序/无序列表、任务列表、表格、行内代码、代码块、引用、分割线、链接
+2. WHERE 单个换行 系统 SHALL 渲染为软换行（`<br>`），贴合聊天语感（不因 Markdown 规则吞掉单换行）
+3. WHERE 用户消息 系统 SHALL 保持纯文本（`white-space: pre-wrap`），不做 Markdown 解析
+4. WHERE 安全 系统 SHALL **不**解析回复中的原始 HTML（不启用 rehype-raw），链接以新窗口打开（`target=_blank rel=noreferrer`）
+5. WHILE 流式输出中 系统 SHALL 对已到达的文本逐步 Markdown 渲染，并在末尾保留输入光标提示
+6. WHERE Markdown 元素样式 系统 SHALL 使用视觉规范 §02 tokens：链接 `#2563EB`、表格发丝罫线 `#E2E8F0` + 表头浅底 `#F8FAFC`（§05 Table）、行内代码/代码块浅底 + 等宽、引用左罫线；表格/代码块过宽时在自身容器内横向滚动，不撑破气泡
+
+#### 引用 / 影响
+- 视觉规范：§02 tokens、§05 Table/代码；§07 待补「消息 Markdown 排版」模式
+- 组件：`Md`（react-markdown + remark-gfm + remark-breaks），`components.tsx`；样式 `.md-body`（agent-redesign.css）
+- 依赖：新增 `react-markdown` / `remark-gfm` / `remark-breaks`
+- 现有功能：三处对话气泡复用，与执行链路/用量脚注并存
+
+#### 待确认 / 假设
+- ⬜后续：代码块语法高亮（当前仅等宽 + 浅底，未着色）
+- ⬜后续：数学公式（KaTeX）、图表等富内容（当前不解析）
+- ❓超宽表格/长代码在窄屏的最佳折行策略（当前容器内横向滚动）

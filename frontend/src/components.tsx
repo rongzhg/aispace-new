@@ -13,6 +13,9 @@ import {
   ClockCircleOutlined, PlayCircleOutlined, HistoryOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import remarkBreaks from "remark-breaks";
 const { Sider, Content } = Layout;
 const { Text } = Typography;
 import { ACCENT, FRAMEWORKS, PROVIDERS, MODEL_PARAMS, TOOLS, SKILLS, TEMPLATES, fwName, ISOLATIONS, isoName, TENANT_NOTE, INIT_WORKSPACES, td, now, mkAgent, INIT_AGENTS } from "./config";
@@ -201,6 +204,14 @@ export const pill = (bg, color) => ({ background: bg, color, fontSize: 11, paddi
 // 会话消息的时间戳（后端/前端均以 now() = 'YYYY-MM-DD HH:mm' 落库）→ QA 气泡下只显示 HH:mm
 export const msgTime = ts => (ts || '').slice(11, 16);
 
+// AI 回复按 Markdown（GFM：表格/列表/代码/链接 + 软换行）渲染，样式见 .md-body（agent-redesign.css）
+// 生 HTML 不解析（未启用 rehype-raw）→ 安全；链接新窗口打开
+const MD_REMARK = [remarkGfm, remarkBreaks];
+const MD_COMPONENTS = { a: ({ node, ...p }) => <a {...p} target="_blank" rel="noreferrer" /> };
+export function Md({ text }) {
+  return <div className="md-body"><ReactMarkdown remarkPlugins={MD_REMARK} components={MD_COMPONENTS}>{text || ''}</ReactMarkdown></div>;
+}
+
 /* ================= 调试面板 (Spec I · mock) ================= */
 // 执行链路通用展示：steps = [{type:'think',text} | {type:'tool',name,input,output,is_error,running} | {type:'info',text}]
 // 原生 <details> 折叠，零额外状态；流式与历史回放共用同一结构。
@@ -359,7 +370,7 @@ export function DebugPanel({ cfg, chatPath, streamPath, initialMsgs, onTurn }) {
           <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
             {m.role === 'bot' && <TraceSteps steps={m.steps} />}
             <div style={{
-              maxWidth: '82%', padding: '10px 13px', borderRadius: 12, fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap',
+              maxWidth: '82%', padding: '10px 13px', borderRadius: 12, fontSize: 13.5, lineHeight: 1.6,
               background: m.role === 'user' ? ACCENT : '#F4F4F7', color: m.role === 'user' ? '#fff' : (m.err ? '#D4380D' : '#2A2A33'),
               borderBottomRightRadius: m.role === 'user' ? 3 : 12, borderBottomLeftRadius: m.role === 'bot' ? 3 : 12,
             }}>
@@ -367,7 +378,9 @@ export function DebugPanel({ cfg, chatPath, streamPath, initialMsgs, onTurn }) {
                 ? ((m.steps || []).length
                     ? <span style={{ color: '#8A8C99', fontSize: 12.5 }}>执行中…（上方为实时链路）</span>
                     : <span style={{ display: 'inline-flex', alignItems: 'center' }} aria-label="正在回复"><span className="pg-dot" style={{ animationDelay: '0s' }} /><span className="pg-dot" style={{ animationDelay: '.18s' }} /><span className="pg-dot" style={{ animationDelay: '.36s' }} /></span>)
-                : <>{m.text}{m.role === 'bot' && m.pending ? <span className="pg-caret">▋</span> : null}</>}
+                : m.role === 'bot'
+                    ? <><Md text={m.text} />{m.pending ? <span className="pg-caret">▋</span> : null}</>
+                    : <span style={{ whiteSpace: 'pre-wrap' }}>{m.text}</span>}
             </div>
             {(msgTime(m.ts) || m.usage || m.model || m.stop) && (
               <div style={{ fontSize: 11, color: '#94A3B8', margin: '4px 2px 0' }}>
@@ -1725,12 +1738,16 @@ export function ChatPanel({ curWs, isAdmin, onChanged }) {
               ? <div key={i} style={{ textAlign: 'center', fontSize: 12, color: '#A6A8B4', margin: '6px 0 14px' }}>{m.text}</div>
               : <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
                   {m.role === 'bot' && <TraceSteps steps={m.steps} />}
-                  <div style={{ maxWidth: '82%', padding: '10px 13px', borderRadius: 12, fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', background: m.role === 'user' ? ACCENT : (m.err ? '#FDECEC' : '#F4F4F7'), color: m.role === 'user' ? '#fff' : (m.err ? '#B42318' : '#2A2A33'), borderBottomRightRadius: m.role === 'user' ? 3 : 12, borderBottomLeftRadius: m.role === 'bot' ? 3 : 12 }}>
-                    {m.text || (m.pending
-                      ? ((m.steps || []).length
-                          ? <span style={{ color: '#8A8C99', fontSize: 12.5 }}>执行中…（上方为实时链路）</span>
-                          : <span style={{ color: '#8A8C99' }}><Spin size="small" style={{ marginRight: 8 }} />通用 Agent 思考中…</span>)
-                      : '')}
+                  <div style={{ maxWidth: '82%', padding: '10px 13px', borderRadius: 12, fontSize: 13.5, lineHeight: 1.6, background: m.role === 'user' ? ACCENT : (m.err ? '#FDECEC' : '#F4F4F7'), color: m.role === 'user' ? '#fff' : (m.err ? '#B42318' : '#2A2A33'), borderBottomRightRadius: m.role === 'user' ? 3 : 12, borderBottomLeftRadius: m.role === 'bot' ? 3 : 12 }}>
+                    {m.text
+                      ? (m.role === 'bot'
+                          ? <><Md text={m.text} />{m.pending ? <span className="pg-caret">▋</span> : null}</>
+                          : <span style={{ whiteSpace: 'pre-wrap' }}>{m.text}</span>)
+                      : (m.pending
+                          ? ((m.steps || []).length
+                              ? <span style={{ color: '#8A8C99', fontSize: 12.5 }}>执行中…（上方为实时链路）</span>
+                              : <span style={{ color: '#8A8C99' }}><Spin size="small" style={{ marginRight: 8 }} />通用 Agent 思考中…</span>)
+                          : '')}
                   </div>
                   {(msgTime(m.ts) || m.usage || m.model || m.stop) && (
                     <div style={{ fontSize: 11, color: '#94A3B8', margin: '4px 2px 0' }}>
