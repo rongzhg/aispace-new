@@ -231,6 +231,28 @@ description: 「部署」= 可触发的任务模板（Agent + 版本策略 + 指
 - 现有功能：扩展通用助手(L) 的平台操作工具与内置技能；调用 O 的既有 REST 接口
 - 设计决策：cron 由助手翻译（工具说明给格式+常用映射，后端校验兜底）；能力集与「平台界面能做的」对齐
 
+#### 复现要点（供开发按此重建，非规范性 WHAT）
+> 通用助手 = 一个常驻 Claude Code(copilot)，靠 **platform-ops MCP 工具**真正调用平台 O 的 REST 接口、靠 **内置 skill** 走引导流程（架构见 spec L）。要复现本能力，落三处：
+
+**1. platform-ops MCP 新增 6 个工具**（`backend/mcp_server.py`，纯标准库 stdio JSON-RPC；每个工具=一个 `t_*()` 纯函数 + 注册表项 name/description/inputSchema/fn）：
+
+| 工具 name | 入参 | 调用的 O 接口 | 说明 |
+|---|---|---|---|
+| `list_deployments` | `workspace_id?` | `GET /api/deployments[?ws=]` | 返回 名称/agent/调度摘要/下次运行/上次运行状态/启用态 |
+| `list_deployment_runs` | `deployment_id` | `GET /api/deployments/{id}/runs` | 返回 状态/触发/版本/起止/摘要或错误/会话 id |
+| `create_deployment` | `agent_id, name, prompt, schedule_type, cron_expr?, run_at?` | `POST /api/deployments` | 固定 `versionPolicy='latest'`、不传 isolation；agent 未发布则接口 400 |
+| `run_deployment` | `deployment_id` | `POST /api/deployments/{id}/run` | 异步触发一次 |
+| `set_deployment_enabled` | `deployment_id, enabled` | `PATCH /api/deployments/{id}` | 启停 |
+| `delete_deployment` | `deployment_id` | `DELETE /api/deployments/{id}` | 破坏性，先确认 |
+
+`create_deployment` 的 description **须内嵌 cron 格式与常用映射**，让助手把自然语言翻成表达式：每天9点=`0 9 * * *`、每小时=`0 * * * *`、每周一9点=`0 9 * * 1`、每月1号9点=`0 9 1 * *`、工作日8:30=`30 8 * * 1-5`。
+
+**2. 内置引导技能 `schedule-creator`**（`backend/copilot.py` 的 BUILTIN_SKILLS，物化为 `.claude/skills/schedule-creator/SKILL.md`）：description 触发于「让某 Agent 按计划自动运行」；正文步骤 = 先用 list_agents/list_deployments 核对目标 Agent 是否已发布(未发布则引导发布，不硬试) → 澄清 Agent/任务名+指令/频率 → 翻 cron(拿不准复述确认) → 调 create_deployment → 回报任务名+调度+下次运行。system 提示(`system_md()`)的「能力来源」需列出这 6 个工具与该技能。
+
+**3. 后端硬校验**：`POST /api/deployments`（`deployment_create`）在建之前查 `published` 表，未发布则 `HTTPException(400, "请先发布该 Agent…")`——保证助手与界面走同一道闸。
+
+> 生效条件：改这三处后需重启后端；copilot 工作目录在 build 时刷新(`build_workdir`)，故新技能/工具要新开对话或重建 copilot 目录才加载。
+
 ---
 
 ## 与其它 spec 的关系
