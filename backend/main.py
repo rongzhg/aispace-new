@@ -972,9 +972,11 @@ def _turn_usage_of(ev):
     return out or None
 
 
-def run_claude_code(system_prompt: str, message: str, model: str, session_id: Optional[str]):
+def run_claude_code(system_prompt: str, message: str, model: str, session_id: Optional[str], cfg: dict = None):
     """无头调用本机 Claude Code 真实运行。返回 {engine, reply, session_id?, steps?}。
-    用 stream-json 全量收集：除最终回复外，还原思考过程与工具调用链（调试面板展示）。"""
+    用 stream-json 全量收集：除最终回复外，还原思考过程与工具调用链（调试面板展示）。
+    cfg 传入时，把其绑定的 MCP（tools）物化为 .mcp.json 并 --mcp-config 加载，
+    让试跑「当前配置」也能调用工具（与已发布服务一致）。"""
     b = claude_bin()
     if not b:
         return {"engine": "mock", "reply": None}
@@ -987,6 +989,15 @@ def run_claude_code(system_prompt: str, message: str, model: str, session_id: Op
         cmd += ["--model", model]
     workdir = os.path.join(AGENTS_DIR, ".debug")
     os.makedirs(workdir, exist_ok=True)
+    # 绑定的 MCP：物化 .mcp.json 并加载（先清旧，避免上次试跑的工具残留）
+    mcp_path = os.path.join(workdir, ".mcp.json")
+    try:
+        os.remove(mcp_path)
+    except FileNotFoundError:
+        pass
+    if cfg and (cfg.get("tools") or []):
+        if _materialize_mcp(workdir, cfg.get("wsId"), cfg.get("tools") or []):
+            cmd += ["--mcp-config", mcp_path, "--dangerously-skip-permissions"]
     env = os.environ.copy()
     env["PATH"] = os.path.dirname(b) + os.pathsep + env.get("PATH", "")  # 让同目录的 node 可被找到
     try:
@@ -1073,7 +1084,7 @@ def chat(aid: str, body: ChatIn):
                           f"收到：{body.message}")
         return r
     sys_p = build_system_prompt(cfg)
-    r = run_claude_code(sys_p, body.message, cfg.get("model", ""), body.session_id)
+    r = run_claude_code(sys_p, body.message, cfg.get("model", ""), body.session_id, cfg=cfg)
     if r.get("engine") == "mock":
         r["reply"] = (f"（mock · 本机未检测到 claude 命令）「{cfg.get('name','Agent')}」"
                       f"收到：{body.message}")

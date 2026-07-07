@@ -1329,9 +1329,10 @@ export function Playground({ agents, embedded }) {
       try {
         const full = await apiCall(`/api/agents/${item.id}`); const v = (full.versions || []).find(x => x.version === item.version);
         setCfg({ ...(v ? v.config : full), id: full.id });
-        // 载入该 agent 名下会话：有则打开最近一条（回显历史），没有则开一条新的（create session 即确保云端沙箱就绪）
+        // 载入该 agent 名下会话：优先打开最近一条「有内容」的会话（回显历史，避免落在空会话上像"历史没了"）；
+        // 全是空会话则退回最近一条；一条都没有才新开（create session 即确保云端沙箱就绪）
         const l = await loadPgSessions(item.id);
-        if (l.length) await switchPgSession(l[0].id); else await newPgSession(item.id);
+        if (l.length) await switchPgSession((l.find(x => x.count) || l[0]).id); else await newPgSession(item.id);
       }
       catch (e) { antMsg.error('加载失败：' + e.message); }
     } else { const a = agents.find(x => x.id === item.id); setCfg(a ? { ...a } : null); }
