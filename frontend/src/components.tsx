@@ -2129,7 +2129,7 @@ export function McpMarket({ wsId }) {
             options={[{ label: '表单', value: 'form' }, { label: 'JSON', value: 'json' }]} style={{ marginBottom: 16 }} />
 
           {reg.mode === 'json'
-            ? <Field label="MCP 注册 JSON" required hint="粘贴标准 mcpServers 配置（仅支持 http/sse 远程类型）；可一次注册多个 server">
+            ? <Field label="MCP 注册 JSON" required hint="粘贴标准 mcpServers 配置（仅支持 Streamable HTTP 远程类型）；可一次注册多个 server">
                 <Input.TextArea rows={10} value={reg.json} onChange={e => setReg({ ...reg, json: e.target.value })}
                   placeholder={'{\n  "mcpServers": {\n    "my-server": {\n      "type": "http",\n      "url": "https://example.com/mcp",\n      "headers": { "Authorization": "Bearer xxx" }\n    }\n  }\n}'}
                   style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 12 }} />
@@ -2137,7 +2137,7 @@ export function McpMarket({ wsId }) {
             : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <Field label="服务器类型" required>
                   <Segmented value={reg.transport} onChange={transport => setReg({ ...reg, transport })}
-                    options={[{ label: 'Streamable HTTP', value: 'http' }, { label: 'SSE', value: 'sse' }]} />
+                    options={[{ label: 'Streamable HTTP', value: 'http' }]} />
                 </Field>
                 <Field label="服务器名称" required><Input value={reg.name} onChange={e => setReg({ ...reg, name: e.target.value })} placeholder="如：内部工单系统" /></Field>
                 <Field label="用途简介"><Input value={reg.desc} onChange={e => setReg({ ...reg, desc: e.target.value })} placeholder="一句话说明这个 MCP 能做什么" /></Field>
