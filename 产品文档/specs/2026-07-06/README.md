@@ -6,15 +6,19 @@
 
 | 模块 | 文件 | 范围 | 影响的主 spec |
 |---|---|---|---|
+| O | [../O-scheduled-task.md](../O-scheduled-task.md) | **部署 tab 重构为「定时任务」**（deployment=可触发任务模板）：模板增删改查、cron/一次性/仅手动调度、触发即产出 Run+Session、运行台账深链会话、版本触发时解析、**运行环境复用 Agent 发布设置 + 仅已发布 Agent 可建**、会话来源标记/过滤（删云端回传）、Playground 排除定时会话、抽屉可拖拽调宽、按视觉规范重做、**通用助手可增删查定时任务**（schedule-creator 技能 + 6 个 platform-ops 工具） | **新增主模块 O**（与 A–N 并列，故置于 `../`，非日期目录）；I(发布/运行环境)、L(通用助手)、N(会话来源/深链) |
 | P | [P-conversation-shell.md](./P-conversation-shell.md) | 会话轨重做（小号新建 / 整行卡片 / hover 操作 / 可收起）、左侧主导航可收起、QA 消息时间展示 | L(Chat)、I(Playground)、应用外壳(§03/§07) |
 | Q | [Q-debug-trace.md](./Q-debug-trace.md) | 调试执行链路（思考 / 工具链 / MCP 徽标 / 子代理 / 图片占位 / 压缩标记）+ 每轮用量脚注 + **AI 回复 Markdown 渲染**；三处统一、两 runtime 统一协议、流式+历史回放 | I(试跑/调试)、L(通用助手) |
 | R | [R-session-detail-ime.md](./R-session-detail-ime.md) | Session 明细页对齐 Chat/Playground 展示（Markdown 正文 + 执行链路 + 用量脚注，只读回放）+ 对话 Composer 输入法组合守卫（拼音未完不误发） | N(Session 控制台)、L(Chat)、I(Playground 调试) |
 
 > 说明：Q 的「AI 回复 Markdown 渲染」与 R 为当日晚间（20:00 后）增量；R 的两块对应主 spec N-session-console(v3) 与 L-assistant(v5, AC10) 的细化。
 
+> 注：O 是**新增的主功能模块**（部署/定时任务），与 A–N 同级、落在 `../O-scheduled-task.md`；P、Q 是对既有模块的**细化增量**，故留在本日期目录。三者均为 2026-07-06 当日产出。
+
 ## 视觉规范一致性
 
 本日改动已按 [视觉规范.dc.html](../../视觉规范.dc.html) 核查并修正：
+- ✅ **定时任务 tab（O）**按 §03/§04/§05/§08 落地：22px/760 标题 + 12.5px 说明；工具栏（搜索 + 启用状态过滤 + 计数 + 刷新）；表格表头 `#F8FAFC`/11px uppercase、发丝分割 `#EDF0F4`、行内主信息加粗、行 hover；状态用语义色（成功 `#047857/#ECFDF5`、失败 `#DC2626/#FEE2E2`、进行中 `#B45309/#FFFBEB`）；操作列固定右侧 + Tooltip 说明动作；运行历史 / 会话明细抽屉支持左右拖拽调宽
 - ✅ 会话轨新建改为**小号 rail action**（非整宽主 CTA，符合 §07）
 - ✅ 会话项 active 用 `#E8EEF7`、标题占满宽、操作 hover 显形（§07）
 - ✅ 链路/时间/用量配色统一到 §02 tokens（思考 `#B45309`、工具 `#4F46E5`、子代理/链接 `#2563EB`、MCP 徽标 Legacy Indigo、meta `#94A3B8`、成功 `#047857`、失败 `#DC2626`、警告 `#B45309`），移除造色 `#B0B3BE`/`#0E7490`
