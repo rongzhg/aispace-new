@@ -2368,12 +2368,14 @@ def _normalize_transport(transport):
 
 
 def _validate_mcp_register(body: "McpRegisterIn"):
-    """校验注册入参并回传规范化后的 transport。平台仅支持远程（http/sse）MCP，不支持本地命令(stdio)。"""
+    """校验注册入参并回传规范化后的 transport。**注册仅支持 Streamable HTTP**，不支持 SSE、不支持本地命令(stdio)。"""
     if not (body.name or "").strip():
         raise HTTPException(422, "名称必填")
     t = _normalize_transport(body.transport)
-    if t not in ("http", "sse"):
-        raise HTTPException(422, "仅支持注册远程 MCP（Streamable HTTP / SSE），不支持本地命令(stdio)")
+    if t == "sse":
+        raise HTTPException(422, "注册暂不支持 SSE 模式的 MCP Server，仅支持 Streamable HTTP")
+    if t != "http":
+        raise HTTPException(422, "仅支持注册远程 MCP（Streamable HTTP），不支持本地命令(stdio)")
     if not (body.url or "").strip():
         raise HTTPException(422, "远程 MCP 必须填服务器地址")
     return t
@@ -2393,8 +2395,10 @@ def _parse_mcp_config(cfg, fallback_name=""):
         if not isinstance(spec, dict):
             continue
         t = _normalize_transport(spec.get("type") or ("http" if spec.get("url") else "stdio"))
-        if t not in ("http", "sse"):
-            raise HTTPException(422, f"server「{name}」是本地命令(stdio)类型，平台仅支持远程 MCP（http/sse），请改用带 url 的配置")
+        if t == "sse":
+            raise HTTPException(422, f"server「{name}」是 SSE 模式，注册暂不支持 SSE，仅支持 Streamable HTTP")
+        if t != "http":
+            raise HTTPException(422, f"server「{name}」是本地命令(stdio)类型，平台仅支持远程 MCP（Streamable HTTP），请改用带 url 的配置")
         if not (spec.get("url") or "").strip():
             raise HTTPException(422, f"server「{name}」缺少 url")
         hd = spec.get("headers")
