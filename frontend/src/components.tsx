@@ -144,7 +144,7 @@ export function AssetDrawer({ open, type, selected, onClose, onConfirm, wsId }) 
     if (!open || !API_ON || !wsId) return;
     apiCall((type === 'tool' ? '/api/tools' : '/api/skills') + '?ws=' + wsId)
       .then(rows => setInstalled((rows || []).map(r => type === 'tool'
-        ? { id: r.id, name: r.name, desc: r.summary, cat: r.source === 'custom' ? '本空间 · 自定义 MCP' : '本空间 · MCP', mcp: r.command, ver: '', locked: false }
+        ? { id: r.id, name: r.name, desc: r.summary, cat: r.source === 'custom' ? '本空间 · 自定义 MCP' : '本空间 · MCP', mcp: r.transport === 'http' ? 'Streamable HTTP' : r.transport === 'sse' ? 'SSE' : r.command, ver: '', locked: false }
         : { id: r.id, name: r.name, desc: r.summary, cat: r.source === 'custom' ? '本空间 · 自定义技能' : '本空间 · 技能', locked: false })))
       .catch(() => setInstalled([]));
   }, [open, type, wsId]);
@@ -1926,91 +1926,230 @@ function SkillTreePage({ skill, wsId, onBack }) {
 }
 
 /* MCP 详情：展示标准 mcpServers 配置（MCP 协议形态） */
-function McpDetailModal({ open, mcp, onClose }) {
+/* ===== MCP 视觉 token（对齐「产品文档/视觉规范.dc.html」）===== */
+const MT = {
+  ink900: '#0f172a', ink700: '#334155', ink650: '#475569', ink500: '#64748b', ink350: '#94a3b8',
+  lineStrong: '#dfe3ea', line: '#e2e8f0', lineSoft: '#edf0f4', rail: '#f8fafc', muted: '#f1f5f9',
+  accent: '#2563eb', indigo: '#4f46e5', accentSoft: '#eef0ff',
+  success: '#047857', successSoft: '#ecfdf5', warning: '#b45309', warningSoft: '#fffbeb', danger: '#dc2626',
+};
+const mtag = (bg, color) => ({ display: 'inline-flex', alignItems: 'center', height: 20, padding: '0 7px', borderRadius: 4, fontSize: 11.5, fontWeight: 700, lineHeight: 1, background: bg, color, whiteSpace: 'nowrap' });
+const transportTag = (t) => t === 'sse'
+  ? <span style={mtag('#eef0ff', '#4f46e5')}>SSE</span>
+  : t === 'http'
+    ? <span style={mtag('#eef0ff', '#4f46e5')}>Streamable HTTP</span>
+    : <span style={mtag(MT.muted, MT.ink650)}>本地 stdio</span>;
+const scopeTag = (isPlat, disabled) => isPlat
+  ? <span style={mtag(disabled ? MT.muted : MT.successSoft, disabled ? MT.ink500 : MT.success)}>{disabled ? '公开·已禁用' : '公开'}</span>
+  : <span style={mtag(MT.muted, MT.ink650)}>本空间</span>;
+
+function McpDetailModal({ open, mcp, wsId, onClose }) {
+  const [probe, setProbe] = React.useState({ state: 'idle', tools: [], err: '' });
+  React.useEffect(() => { setProbe({ state: 'idle', tools: [], err: '' }); }, [mcp && mcp.id]);
   if (!mcp) return null;
   const desc = mcp.desc || mcp.summary || '';
   const env = mcp.env || [];
-  const server = { type: 'stdio', command: mcp.command, args: mcp.args || [] };
-  if (env.length) server.env = Object.fromEntries(env.map(k => [k, '<在运行环境配置>']));
+  const isRemote = mcp.transport === 'http' || mcp.transport === 'sse';
+  const isPlat = mcp.scope === 'platform';
+  let server;
+  if (isRemote) {
+    server = { type: mcp.transport, url: mcp.url || '' };
+    if (mcp.headers && Object.keys(mcp.headers).length) server.headers = mcp.headers;
+  } else {
+    server = { type: 'stdio', command: mcp.command, args: mcp.args || [] };
+    if (env.length) server.env = Object.fromEntries(env.map(k => [k, '<在运行环境配置>']));
+  }
   const cfg = JSON.stringify({ mcpServers: { [mcp.id]: server } }, null, 2);
-  const srcLabel = mcp.source === 'custom' ? '自定义' : (mcp.official ? '官方' : '社区');
+  const runProbe = async () => {
+    setProbe({ state: 'loading', tools: [], err: '' });
+    try {
+      const r = await apiCall(`/api/tools/${encodeURIComponent(mcp.id)}/probe?ws=${wsId}`, { method: 'POST' });
+      setProbe({ state: 'done', tools: r.tools || [], err: '' });
+    } catch (e) { setProbe({ state: 'error', tools: [], err: (e.message || '').replace(/^\d+\s*/, '') || '连接失败' }); }
+  };
+  const secLabel = { fontSize: 11, fontWeight: 760, letterSpacing: '.04em', textTransform: 'uppercase', color: MT.ink350 };
   return (
-    <Modal open={open} onCancel={onClose} footer={null} width={620}
-      title={<span>{mcp.name} <Tag bordered={false} style={{ marginLeft: 6, fontSize: 11 }}>{srcLabel}</Tag></span>}>
-      <div style={{ fontSize: 12.5, color: '#5A5C6B', lineHeight: 1.6, marginBottom: 14 }}>{desc || '—'}</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 16 }}>
-        <span style={pill('#F1F1F4', '#5A5C6B')}>{mcp.category}</span>
-        {env.map(e => <span key={e} style={pill('#FFF8E6', '#946C00')}>需 {e}</span>)}
-        {mcp.homepage && <a href={mcp.homepage} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: ACCENT }}>主页 / 文档 ↗</a>}
-      </div>
+    <Modal open={open} onCancel={onClose} footer={null} width={640} styles={{ body: { paddingTop: 4 } }}
+      title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontWeight: 760, color: MT.ink900 }}>{mcp.name}</span>
+        {scopeTag(isPlat, mcp.disabled)}{transportTag(mcp.transport)}
+      </span>}>
+      <div style={{ fontSize: 12.5, color: MT.ink500, lineHeight: 1.65, margin: '2px 0 14px' }}>{desc || '—'}</div>
+
+      {isRemote && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <span style={{ ...mtag(MT.rail, MT.ink650), height: 24, fontWeight: 600, fontFamily: 'ui-monospace,Menlo,monospace', maxWidth: 440, overflow: 'hidden', textOverflow: 'ellipsis', border: '1px solid ' + MT.line }}>{mcp.url}</span>
+        {Object.keys(mcp.headers || {}).map(h => <span key={h} style={mtag(MT.warningSoft, MT.warning)}>头 {h}</span>)}
+      </div>}
+
+      {/* 接口列表：连接远程 MCP 探测其 tools */}
+      {isRemote && <div style={{ border: '1px solid ' + MT.lineStrong, borderRadius: 6, marginBottom: 14, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 12px', background: MT.rail, borderBottom: '1px solid ' + MT.lineSoft }}>
+          <span style={secLabel}>提供的接口{probe.state === 'done' ? ` · ${probe.tools.length}` : ''}</span>
+          <Button size="small" icon={<ReloadOutlined />} loading={probe.state === 'loading'} onClick={runProbe}>
+            {probe.state === 'idle' ? '获取接口列表' : '重新探测'}
+          </Button>
+        </div>
+        <div style={{ padding: probe.state === 'idle' ? '14px 12px' : 0 }}>
+          {probe.state === 'idle' && <div style={{ fontSize: 12, color: MT.ink350 }}>点击「获取接口列表」实时连接该 MCP，列出它暴露的工具接口。</div>}
+          {probe.state === 'loading' && <div style={{ padding: 18, textAlign: 'center' }}><Spin size="small" /></div>}
+          {probe.state === 'error' && <div style={{ padding: '14px 12px', fontSize: 12, color: MT.danger }}>探测失败：{probe.err}<div style={{ color: MT.ink350, marginTop: 4 }}>请检查地址、请求头凭证或该服务是否可达。</div></div>}
+          {probe.state === 'done' && (probe.tools.length === 0
+            ? <div style={{ padding: '14px 12px', fontSize: 12, color: MT.ink350 }}>该 MCP 未暴露任何工具接口。</div>
+            : probe.tools.map((t, i) => (
+                <div key={i} style={{ padding: '9px 12px', borderBottom: i < probe.tools.length - 1 ? '1px solid ' + MT.lineSoft : 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: MT.ink900, fontFamily: 'ui-monospace,Menlo,monospace' }}>{t.name}</div>
+                  {t.description && <div style={{ fontSize: 12, color: MT.ink500, lineHeight: 1.55, marginTop: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{t.description}</div>}
+                </div>
+              )))}
+        </div>
+      </div>}
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 650, color: '#33333C' }}>标准 mcpServers 配置（MCP 协议 · stdio）</span>
+        <span style={secLabel}>标准 mcpServers 配置</span>
         <Button size="small" onClick={() => { navigator.clipboard && navigator.clipboard.writeText(cfg); antMsg.success('已复制'); }}>复制</Button>
       </div>
-      <pre style={{ margin: 0, background: '#FAFAFC', border: '1px solid #F1F1F5', color: '#33333C', borderRadius: 8, padding: 14, fontSize: 12.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 320, overflow: 'auto', fontFamily: 'ui-monospace, Menlo, monospace' }}>{cfg}</pre>
-      <div style={{ fontSize: 11.5, color: '#A6A8B4', marginTop: 10 }}>所需环境变量的值在运行环境中配置；远程（HTTP）型 MCP 用 <code>type:"http"</code> + <code>url</code> + <code>headers</code>。</div>
+      <pre style={{ margin: 0, background: MT.rail, border: '1px solid ' + MT.line, color: MT.ink700, borderRadius: 6, padding: 12, fontSize: 12, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 260, overflow: 'auto', fontFamily: 'ui-monospace, Menlo, monospace' }}>{cfg}</pre>
     </Modal>
   );
 }
+
+/* MCP 高密度行（对齐视觉规范：紧凑行 + 语义标签 + 轻操作） */
+function McpRow({ m, onView, onRemove, onToggle }) {
+  const isPlat = m.scope === 'platform';
+  const isRemote = m.transport === 'http' || m.transport === 'sse';
+  const dim = m.disabled ? 0.5 : 1;
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px,1.7fr) 132px minmax(0,1.5fr) 92px 128px', gap: 12, alignItems: 'center', minHeight: 52, padding: '9px 14px', borderBottom: '1px solid ' + MT.lineSoft }}
+      onMouseEnter={e => (e.currentTarget.style.background = MT.rail)} onMouseLeave={e => (e.currentTarget.style.background = '')}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, opacity: dim }}>
+        <div style={{ width: 28, height: 28, flexShrink: 0, border: '1px solid ' + MT.line, borderRadius: 6, background: MT.rail, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MT.ink500 }}><ToolOutlined /></div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: MT.ink900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>
+          <div style={{ fontSize: 11.5, color: MT.ink500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.summary || m.desc || '—'}</div>
+        </div>
+      </div>
+      <div style={{ opacity: dim }}>{transportTag(m.transport)}</div>
+      <div style={{ opacity: dim, fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 11.5, color: MT.ink500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {isRemote ? m.url : `${m.command || ''} ${(m.args || []).slice(0, 2).join(' ')}`.trim()}
+      </div>
+      <div style={{ opacity: dim }}>{scopeTag(isPlat, m.disabled)}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }}>
+        <Button size="small" type="text" style={{ color: MT.accent, padding: '0 6px' }} onClick={() => onView(m)}>详情</Button>
+        {isPlat
+          ? <Button size="small" type="text" style={{ padding: '0 6px', color: m.disabled ? MT.accent : MT.ink500 }} onClick={() => onToggle(m)}>{m.disabled ? '启用' : '禁用'}</Button>
+          : <Popconfirm title="删除该 MCP？" okText="删除" okButtonProps={{ danger: true }} cancelText="取消" onConfirm={() => onRemove(m)}>
+              <Tooltip title="删除"><Button size="small" type="text" danger icon={<DeleteOutlined />} style={{ padding: '0 6px' }} /></Tooltip>
+            </Popconfirm>}
+      </div>
+    </div>
+  );
+}
+
+// 可注册来源提示（需求 2.2）
+const MCP_SOURCES_HINT = '可接入 Aone 开放市场、Zetta、灵境 等平台上的 MCP Server —— 复制其 Streamable HTTP / SSE 地址即可注册。';
 
 export function McpMarket({ wsId }) {
   const [installed, setInstalled] = useState([]);
   const [loading, setLoading] = useState(true);
   const [reg, setReg] = useState(null);          // 注册 MCP 表单
-  const [mdetail, setMdetail] = useState(null);  // 点卡片看详情
+  const [mdetail, setMdetail] = useState(null);  // 点行看详情
   const loadInstalled = () => { setLoading(true); return apiCall('/api/tools?ws=' + wsId).then(rows => setInstalled(rows || [])).catch(() => {}).finally(() => setLoading(false)); };
   React.useEffect(() => { loadInstalled(); }, [wsId]);
   const remove = async (m) => { try { await apiCall(`/api/tools/${encodeURIComponent(m.id)}?ws=${wsId}`, { method: 'DELETE' }); antMsg.success('已删除 MCP'); loadInstalled(); } catch (e) { antMsg.error(e.message); } };
   // 平台全局项：本空间不可删，只能禁用/启用（不影响其他空间与平台定义）
   const toggleScope = async (m) => { try { await apiCall(`/api/scope/mcp/${encodeURIComponent(m.id)}/${m.disabled ? 'enable' : 'disable'}?ws=${wsId}`, { method: 'POST' }); antMsg.success(m.disabled ? '已在本空间启用' : '已在本空间禁用'); loadInstalled(); } catch (e) { antMsg.error(e.message); } };
   const submitReg = async () => {
-    if (!reg.name || !reg.command) { antMsg.error('名称与命令必填'); return; }
-    const body = { name: reg.name, desc: reg.desc || '', category: reg.category || '自定义', homepage: reg.homepage || '',
-      command: reg.command, args: (reg.args || '').split('\n').map(s => s.trim()).filter(Boolean),
-      env: (reg.env || '').split(/[,\n]/).map(s => s.trim()).filter(Boolean) };
-    try { await apiCall(`/api/market/mcp/register?ws=${wsId}`, { method: 'POST', body: JSON.stringify(body) }); antMsg.success(`已注册 MCP「${reg.name}」到本空间`); setReg(null); loadInstalled(); } catch (e) { antMsg.error(e.message); }
+    try {
+      const toPlatform = reg.scope === 'platform';
+      if (reg.mode === 'json') {
+        let cfg;
+        try { cfg = JSON.parse(reg.json || ''); } catch { antMsg.error('JSON 解析失败，请检查格式'); return; }
+        const path = toPlatform ? '/api/platform/mcp/register-json' : `/api/market/mcp/register-json?ws=${wsId}`;
+        const r = await apiCall(path, { method: 'POST', body: JSON.stringify({ config: cfg, desc: reg.desc || '' }) });
+        antMsg.success(`已${toPlatform ? '公开发布' : '注册'} ${r.count} 个 MCP`);
+      } else {
+        const t = reg.transport || 'http';
+        if (!reg.name) { antMsg.error('服务器名称必填'); return; }
+        if (!reg.url) { antMsg.error('服务器地址必填'); return; }
+        const body: any = {
+          name: reg.name, desc: reg.desc || '', transport: t, url: reg.url,
+          headers: Object.fromEntries((reg.headers || []).filter(h => (h.k || '').trim()).map(h => [h.k.trim(), h.v || ''])),
+        };
+        const path = toPlatform ? '/api/platform/mcp/register' : `/api/market/mcp/register?ws=${wsId}`;
+        await apiCall(path, { method: 'POST', body: JSON.stringify(body) });
+        antMsg.success(`已${toPlatform ? '公开发布' : '注册'} MCP「${reg.name}」`);
+      }
+      setReg(null); loadInstalled();
+    } catch (e) { antMsg.error(e.message); }
   };
+  const openReg = () => setReg({ mode: 'form', transport: 'http', scope: 'workspace', headers: [] });
+  const HeaderBtn = <Button type="primary" icon={<PlusOutlined />} onClick={openReg} style={{ background: MT.ink900, borderColor: MT.ink900 }}>注册 MCP</Button>;
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div style={{ fontSize: 12.5, color: '#8A8C99' }}>本空间可用 MCP（{installed.length}）· 含<span style={{ color: '#7C3AED' }}>平台全局</span>（所有空间共享）+ 本空间私有</div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setReg({ category: '自定义' })}>注册 MCP</Button>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 14 }}>
+        <div>
+          <div style={{ fontSize: 12.5, color: MT.ink500 }}>本空间可用 MCP <b style={{ color: MT.ink900 }}>{installed.length}</b> · 含<span style={{ color: MT.success }}>公开</span>（全平台共享）+ 本空间私有</div>
+          <div style={{ fontSize: 11.5, color: MT.ink350, marginTop: 3 }}>{MCP_SOURCES_HINT}</div>
+        </div>
+        {HeaderBtn}
       </div>
 
       {loading ? <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
         : installed.length === 0
-          ? <div style={{ border: '1px dashed #DEDEE3', borderRadius: 8, padding: '40px 0', background: '#FCFCFD' }}>
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="本空间还没有 MCP">
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setReg({ category: '自定义' })}>注册 MCP</Button>
-              </Empty>
+          ? <div style={{ border: '1px dashed ' + MT.lineStrong, borderRadius: 6, padding: '40px 0', background: MT.rail }}>
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="本空间还没有 MCP">{HeaderBtn}</Empty>
             </div>
-          : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 14 }}>
-              {installed.map(m => { const isPlat = m.scope === 'platform'; return (
-                <MarketCard key={m.id} title={m.name} desc={m.summary} installed
-                  badge={isPlat
-                    ? <Tag bordered={false} color="purple" style={{ fontSize: 11 }}>{m.disabled ? '全局·已禁用' : '全局'}</Tag>
-                    : <Tag bordered={false} style={{ fontSize: 11 }}>自定义</Tag>}
-                  onRemove={isPlat ? undefined : () => remove(m)}
-                  actionEl={isPlat ? <Button size="small" danger={!m.disabled} type={m.disabled ? 'primary' : 'default'} ghost={m.disabled} onClick={() => toggleScope(m)}>{m.disabled ? '在本空间启用' : '在本空间禁用'}</Button> : undefined}
-                  onView={() => setMdetail(m)}
-                  meta={<div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', opacity: m.disabled ? 0.55 : 1 }}>
-                    <span style={pill('#F1F1F4', '#5A5C6B')}>{m.category}</span>
-                    <span style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 11, color: '#8A8C99' }}>{m.command} {(m.args || []).slice(0, 2).join(' ')}</span>
-                    {(m.env || []).map(e => <span key={e} style={pill('#FFF8E6', '#946C00')}>需 {e}</span>)}
-                  </div>} />
-              ); })}
+          : <div style={{ border: '1px solid ' + MT.lineStrong, borderRadius: 6, background: '#fff', overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px,1.7fr) 132px minmax(0,1.5fr) 92px 128px', gap: 12, padding: '8px 14px', background: MT.rail, borderBottom: '1px solid ' + MT.lineStrong, fontSize: 11, fontWeight: 760, letterSpacing: '.04em', color: MT.ink500, textTransform: 'uppercase' }}>
+                <span>MCP</span><span>类型</span><span>接入地址</span><span>范围</span><span style={{ textAlign: 'right' }}>操作</span>
+              </div>
+              {installed.map(m => <McpRow key={m.id} m={m} onView={setMdetail} onRemove={remove} onToggle={toggleScope} />)}
             </div>}
 
-      <McpDetailModal open={!!mdetail} mcp={mdetail} onClose={() => setMdetail(null)} />
-      <Modal open={!!reg} onCancel={() => setReg(null)} onOk={submitReg} okText="注册到本空间" title="注册 MCP 接口" width={520} destroyOnClose>
-        {reg && <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
-          <Field label="名称" required><Input value={reg.name} onChange={e => setReg({ ...reg, name: e.target.value })} placeholder="如：内部工单系统" /></Field>
-          <Field label="用途简介"><Input value={reg.desc} onChange={e => setReg({ ...reg, desc: e.target.value })} placeholder="一句话说明这个 MCP 能做什么" /></Field>
-          <Field label="分类"><Input value={reg.category} onChange={e => setReg({ ...reg, category: e.target.value })} /></Field>
-          <Field label="启动命令" required><Input value={reg.command} onChange={e => setReg({ ...reg, command: e.target.value })} placeholder="如：npx / node / uvx / python3" /></Field>
-          <Field label="参数（每行一个）"><Input.TextArea rows={3} value={reg.args} onChange={e => setReg({ ...reg, args: e.target.value })} placeholder={'-y\n@scope/your-mcp-server'} style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 12 }} /></Field>
-          <Field label="所需环境变量" hint="逗号或换行分隔，仅填变量名（如 token），值在运行环境配置"><Input value={reg.env} onChange={e => setReg({ ...reg, env: e.target.value })} placeholder="JIRA_TOKEN, API_BASE" /></Field>
-          <Field label="主页 / 文档"><Input value={reg.homepage} onChange={e => setReg({ ...reg, homepage: e.target.value })} placeholder="可选" /></Field>
+      <McpDetailModal open={!!mdetail} mcp={mdetail} wsId={wsId} onClose={() => setMdetail(null)} />
+      <Modal open={!!reg} onCancel={() => setReg(null)} onOk={submitReg}
+        okText={reg && reg.scope === 'platform' ? '公开发布' : '注册到本空间'} title="注册 MCP" width={560} destroyOnClose>
+        {reg && <div style={{ marginTop: 8 }}>
+          <div style={{ display: 'flex', gap: 8, padding: '9px 11px', background: MT.rail, border: '1px solid ' + MT.line, borderRadius: 6, marginBottom: 14, fontSize: 12, color: MT.ink650, lineHeight: 1.55 }}>
+            <span style={{ color: MT.accent, fontWeight: 700 }}>ⓘ</span><span>{MCP_SOURCES_HINT}</span>
+          </div>
+
+          <Segmented block value={reg.mode} onChange={mode => setReg({ ...reg, mode })}
+            options={[{ label: '表单', value: 'form' }, { label: 'JSON', value: 'json' }]} style={{ marginBottom: 16 }} />
+
+          {reg.mode === 'json'
+            ? <Field label="MCP 注册 JSON" required hint="粘贴标准 mcpServers 配置（仅支持 http/sse 远程类型）；可一次注册多个 server">
+                <Input.TextArea rows={10} value={reg.json} onChange={e => setReg({ ...reg, json: e.target.value })}
+                  placeholder={'{\n  "mcpServers": {\n    "my-server": {\n      "type": "http",\n      "url": "https://example.com/mcp",\n      "headers": { "Authorization": "Bearer xxx" }\n    }\n  }\n}'}
+                  style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontSize: 12 }} />
+              </Field>
+            : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <Field label="服务器类型" required>
+                  <Segmented value={reg.transport} onChange={transport => setReg({ ...reg, transport })}
+                    options={[{ label: 'Streamable HTTP', value: 'http' }, { label: 'SSE', value: 'sse' }]} />
+                </Field>
+                <Field label="服务器名称" required><Input value={reg.name} onChange={e => setReg({ ...reg, name: e.target.value })} placeholder="如：内部工单系统" /></Field>
+                <Field label="用途简介"><Input value={reg.desc} onChange={e => setReg({ ...reg, desc: e.target.value })} placeholder="一句话说明这个 MCP 能做什么" /></Field>
+                <Field label="服务器地址" required><Input value={reg.url} onChange={e => setReg({ ...reg, url: e.target.value })} placeholder="https://example.com/mcp" /></Field>
+                <Field label="请求头 Header" hint="可选，逐条添加（如 Authorization: Bearer xxx）">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {(reg.headers || []).map((h, i) => (
+                      <div key={i} style={{ display: 'flex', gap: 8 }}>
+                        <Input placeholder="名（如 Authorization）" value={h.k} onChange={e => { const hs = [...reg.headers]; hs[i] = { ...hs[i], k: e.target.value }; setReg({ ...reg, headers: hs }); }} />
+                        <Input placeholder="值（如 Bearer xxx）" value={h.v} onChange={e => { const hs = [...reg.headers]; hs[i] = { ...hs[i], v: e.target.value }; setReg({ ...reg, headers: hs }); }} />
+                        <Button onClick={() => setReg({ ...reg, headers: reg.headers.filter((_, j) => j !== i) })}>删除</Button>
+                      </div>
+                    ))}
+                    <Button size="small" icon={<PlusOutlined />} onClick={() => setReg({ ...reg, headers: [...(reg.headers || []), { k: '', v: '' }] })} style={{ alignSelf: 'flex-start' }}>添加 Header</Button>
+                  </div>
+                </Field>
+              </div>}
+
+          <div style={{ borderTop: '1px solid ' + MT.lineSoft, margin: '16px 0 12px' }} />
+          <Field label="发布范围" required hint={reg.scope === 'platform' ? '公开：作为全平台可引用的公共工具，所有用户可见。' : '仅本项目空间可见，其他空间不可引用。'}>
+            <Segmented block value={reg.scope} onChange={scope => setReg({ ...reg, scope })}
+              options={[{ label: '仅本项目空间', value: 'workspace' }, { label: '公开（全平台可见）', value: 'platform' }]} />
+          </Field>
         </div>}
       </Modal>
     </div>

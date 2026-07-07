@@ -65,6 +65,7 @@ class Binding(BaseModel):
     dir: str
     model: str = ""
     version: Optional[int] = None
+    mcp: dict = {}      # 该 agent 绑定的 MCP（OpenClaw mcp.servers 形态：{as_<id>: {url,transport,headers}|{command,args,env}}）
 
 
 class ChatIn(BaseModel):
@@ -235,6 +236,41 @@ def deregister_openclaw_agent(agent_id: str):
                        capture_output=True, text=True, timeout=60, env=_oc_env(b), stdin=subprocess.DEVNULL)
     except Exception:
         pass
+
+
+# ============ MCP：把绑定 agent 的 MCP 并集下发进 OpenClaw 全局 mcp.servers ============
+# OpenClaw 的 mcp.servers 是**全局**配置（无 per-agent 作用域），故本 Gateway 托管的所有 OpenClaw agent
+# 共享这批 server。平台下发的 server 统一以 as_ 前缀命名，便于与用户手工配置区分、并在解绑时精准回收。
+_MANAGED_MCP: set = set()   # 平台当前下发到 OpenClaw 全局配置的 server 名
+
+
+def _oc_cli(b, *args, timeout=90):
+    try:
+        return subprocess.run([b, *args], capture_output=True, text=True, timeout=timeout,
+                              env=_oc_env(b), stdin=subprocess.DEVNULL)
+    except Exception:
+        return None
+
+
+def sync_global_mcp():
+    """把当前所有绑定 agent 的 MCP 并集写进 OpenClaw 全局 mcp.servers，回收不再被任何 agent 引用的平台项，
+    最后 reload 让下一轮生效。openclaw 未装则 no-op。"""
+    global _MANAGED_MCP
+    b = openclaw_bin()
+    if not b:
+        return
+    desired = {}
+    for a in AGENTS.values():
+        for name, srv in (a.get("mcp") or {}).items():
+            desired[name] = srv
+    to_unset = _MANAGED_MCP - set(desired)
+    for name, srv in desired.items():
+        _oc_cli(b, "mcp", "set", name, json.dumps(srv, ensure_ascii=False))
+    for name in list(to_unset):
+        _oc_cli(b, "mcp", "unset", name)
+    _MANAGED_MCP = set(desired)
+    if desired or to_unset:
+        _oc_cli(b, "mcp", "reload")   # 释放缓存的 MCP runtime，下一轮读到新配置
 
 
 def parse_agent_output(stdout: str, returncode: int, stderr: str, session_id):
@@ -416,7 +452,9 @@ def bind_agent(b: Binding):
     AGENTS[b.agent_id] = rec
     _persist(rec)
     register_openclaw_agent(rec)   # openclaw 未装则 no-op（mock）
-    return {"ok": True, "bound": b.agent_id, "count": len(AGENTS), "openclaw": bool(openclaw_bin())}
+    sync_global_mcp()              # 把该 agent（连同其余 agent）的 MCP 并集同步进 OpenClaw 全局配置
+    return {"ok": True, "bound": b.agent_id, "count": len(AGENTS), "mcp": list((rec.get("mcp") or {}).keys()),
+            "openclaw": bool(openclaw_bin())}
 
 
 @app.delete("/agents/{agent_id}")
@@ -429,6 +467,7 @@ def unbind_agent(agent_id: str):
         except Exception:
             pass
     deregister_openclaw_agent(agent_id)   # openclaw 未装则 no-op
+    sync_global_mcp()                     # 回收仅该 agent 引用、现已无 agent 需要的平台 MCP
     # 清掉该 agent 的会话轮次
     for k in [k for k in _TURNS if k[0] == agent_id]:
         _TURNS.pop(k, None)
@@ -469,6 +508,7 @@ def chat_stream(b: ChatIn):
 
 
 _restore()
+sync_global_mcp()   # 重启续跑：把已恢复 agent 的 MCP 重新确保进 OpenClaw 全局配置
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("PORT", "9180")), log_level="warning")

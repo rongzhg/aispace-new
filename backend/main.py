@@ -260,13 +260,14 @@ def _stop_service(agent_id):
     SERVICES.pop(agent_id, None)
 
 
-def _bind_openclaw_agent(agent_id, name, workdir, model, version, isolation):
-    """OpenClaw：把 agent 绑进共享 Gateway（一个 Gateway 托多 agent，按 agentId 路由）。热绑定不重启。"""
+def _bind_openclaw_agent(agent_id, name, workdir, model, version, isolation, mcp=None):
+    """OpenClaw：把 agent 绑进共享 Gateway（一个 Gateway 托多 agent，按 agentId 路由）。热绑定不重启。
+    mcp：该 agent 绑定的 MCP（OpenClaw mcp.servers 形态），随绑定下发，Gateway 侧同步进 OpenClaw 全局配置。"""
     gw = _ensure_gateway()
     try:
         _proxy.post(gw["url"] + "/agents", timeout=10, json={
             "agent_id": agent_id, "name": name, "dir": workdir,
-            "model": model or "", "version": version})
+            "model": model or "", "version": version, "mcp": mcp or {}})
     except Exception as e:
         raise HTTPException(502, f"OpenClaw Gateway 不可达，无法绑定 agent：{e}")
     info = {"port": gw["port"], "pid": gw["pid"], "url": gw["url"], "name": name,
@@ -308,7 +309,7 @@ def _start_cloud_service(agent_id, name, model, files, version, framework, isola
     return info
 
 
-def _start_service(agent_id, name, workdir, model, version, framework="CLAUDE_CODE", isolation="L1", files=None, skills=None):
+def _start_service(agent_id, name, workdir, model, version, framework="CLAUDE_CODE", isolation="L1", files=None, skills=None, mcp=None):
     """为某 agent 启动（或复用）常驻服务。R1 单主实例：换版本/环境=停旧起新（OpenClaw 本地为热重绑）。
     位置分派：L1=本地（CLAUDE_CODE 每 agent 一进程 / OPENCLAW 共享 Gateway）；L2/L3=云端独立沙箱。"""
     framework = framework or "CLAUDE_CODE"
@@ -327,7 +328,7 @@ def _start_service(agent_id, name, workdir, model, version, framework="CLAUDE_CO
         # 共享 Gateway：换版本 = 重新绑定（覆盖），不停其他 agent；若上一版是别的框架则先清掉其进程
         if cur and not cur.get("gateway"):
             _stop_service(agent_id)
-        return _bind_openclaw_agent(agent_id, name, workdir, model, version, isolation)
+        return _bind_openclaw_agent(agent_id, name, workdir, model, version, isolation, mcp=mcp)
     # ---- CLAUDE_CODE：每 agent 一进程 ----
     if cur:
         _stop_service(agent_id)     # 单实例：换版本/换框架则替换
@@ -480,6 +481,7 @@ def init_db():
                 ws_id TEXT, id TEXT, name TEXT, summary TEXT, category TEXT,
                 command TEXT, args TEXT, env TEXT, homepage TEXT,
                 source TEXT DEFAULT 'catalog', added_at TEXT,
+                transport TEXT DEFAULT 'stdio', url TEXT DEFAULT '', headers TEXT DEFAULT '{}',
                 PRIMARY KEY (ws_id, id)
             );
             """
@@ -495,6 +497,10 @@ def init_db():
                      "ALTER TABLE installed_skills ADD COLUMN default_on INTEGER DEFAULT 0",
                      "ALTER TABLE installed_mcp ADD COLUMN scope TEXT DEFAULT 'workspace'",
                      "ALTER TABLE installed_mcp ADD COLUMN default_on INTEGER DEFAULT 0",
+                     # 远程 MCP（Streamable HTTP / SSE）：transport 区分形态，url+headers 承载连接信息
+                     "ALTER TABLE installed_mcp ADD COLUMN transport TEXT DEFAULT 'stdio'",
+                     "ALTER TABLE installed_mcp ADD COLUMN url TEXT DEFAULT ''",
+                     "ALTER TABLE installed_mcp ADD COLUMN headers TEXT DEFAULT '{}'",
                      "ALTER TABLE agents ADD COLUMN scope TEXT DEFAULT 'workspace'",
                      # 会话 Tab（spec N）：Agent 记创建人；会话冗余运行元数据，便于按创建人聚合 + 明细展示
                      "ALTER TABLE agents ADD COLUMN creator TEXT",
@@ -1192,14 +1198,51 @@ def _materialize_mcp(workdir, ws_id, mcp_ids, extra=None):
         for r in rows:
             d = dict(r)
             key = re.sub(r"[^a-zA-Z0-9_-]+", "-", d["name"] or d["id"]).strip("-") or d["id"]
-            # env 存的是「所需变量名」列表；用 ${VAR} 让 Claude Code 从运行环境展开（凭证不入库）
-            env = {k: f"${{{k}}}" for k in json.loads(d.get("env") or "[]")}
-            servers[key] = {"command": d["command"], "args": json.loads(d.get("args") or "[]"), "env": env}
+            transport = (d.get("transport") or "stdio").lower()
+            if transport in ("http", "sse"):
+                # 远程 MCP：type + url + headers（headers 的值直接下发，允许 ${VAR} 由运行环境展开）
+                srv = {"type": transport, "url": d.get("url") or ""}
+                headers = json.loads(d.get("headers") or "{}")
+                if headers:
+                    srv["headers"] = headers
+                servers[key] = srv
+            else:
+                # env 存的是「所需变量名」列表；用 ${VAR} 让 Claude Code 从运行环境展开（凭证不入库）
+                env = {k: f"${{{k}}}" for k in json.loads(d.get("env") or "[]")}
+                servers[key] = {"command": d["command"], "args": json.loads(d.get("args") or "[]"), "env": env}
     if not servers:
         return []
     with open(os.path.join(workdir, ".mcp.json"), "w", encoding="utf-8") as f:
         json.dump({"mcpServers": servers}, f, ensure_ascii=False, indent=2)
     return list(servers.keys())
+
+
+def _openclaw_mcp_servers(ws_id, mcp_ids):
+    """把 agent 绑定的 MCP 转成 OpenClaw `mcp.servers` 形态并随绑定下发给 Gateway。
+    远程：{url, transport: streamable-http|sse, headers?}；本地：{command, args, env?}。
+    server 名用 as_<mcpid>（全局唯一、可跨 agent 去重与回收）；OpenClaw 的 mcp.servers 是全局配置，无 per-agent 作用域。"""
+    if not mcp_ids:
+        return {}
+    with db() as c:
+        rows = _effective_rows(c, "installed_mcp", "mcp", ws_id, mcp_ids)
+    servers = {}
+    for r in rows:
+        d = dict(r)
+        name = "as_" + (re.sub(r"[^a-zA-Z0-9_]+", "_", d["id"]).strip("_") or "mcp")
+        transport = (d.get("transport") or "stdio").lower()
+        if transport in ("http", "sse"):
+            srv = {"url": d.get("url") or "", "transport": "streamable-http" if transport == "http" else "sse"}
+            headers = json.loads(d.get("headers") or "{}")
+            if headers:
+                srv["headers"] = headers
+        else:
+            # 本地 stdio：凭证不入库，env 取运行环境同名变量的值下发（OpenClaw 存字面值）
+            srv = {"command": d.get("command") or "", "args": json.loads(d.get("args") or "[]")}
+            env = {k: os.environ.get(k, "") for k in json.loads(d.get("env") or "[]")}
+            if env:
+                srv["env"] = env
+        servers[name] = srv
+    return servers
 
 
 @app.post("/api/agents/{aid}/publish")
@@ -1253,12 +1296,14 @@ def publish(aid: str, version: Optional[int] = None, isolation: str = "L1", body
     iso = isolation or "L1"
     # OpenClaw 上云：把该 agent 绑定的技能收集为下发载荷，云端沙箱经 SKILLS_JSON 物化到 <ws>/skills/
     cloud_skills = _skills_payload(cfg.get("wsId") or a.get("wsId"), cfg.get("skills") or []) if fw == "OPENCLAW" else None
+    # OpenClaw：把绑定的 MCP 转成 OpenClaw mcp.servers 形态，随绑定下发给 Gateway（Claude Code 走 .mcp.json，已在上面物化）
+    oc_mcp = _openclaw_mcp_servers(cfg.get("wsId") or a.get("wsId"), cfg.get("tools") or []) if fw == "OPENCLAW" else None
     with db() as c:
         c.execute("INSERT OR REPLACE INTO published (agent_id, version, path, published_at, isolation) VALUES (?,?,?,?,?)",
                   (aid, ver, d, now(), iso))
     # 发布即起服务（R1 单主实例，换版本/环境=替换）：L1=本地常驻；L2/L3=云端独立沙箱（异步部署）
     svc = _start_service(aid, cfg.get("name") or aid, d, cfg.get("model", ""), ver,
-                         cfg.get("framework", "CLAUDE_CODE"), iso, files=cfg.get("files") or {}, skills=cloud_skills)
+                         cfg.get("framework", "CLAUDE_CODE"), iso, files=cfg.get("files") or {}, skills=cloud_skills, mcp=oc_mcp)
     return {"path": d, "command": cmd, "files": written,
             "skills": mounted_skills, "mcp": mounted_mcp,
             "framework": cfg.get("framework", ""), "version": ver, "isolation": iso,
@@ -2024,10 +2069,23 @@ class McpRegisterIn(BaseModel):
     name: str
     desc: str = ""
     category: str = "自定义"
-    command: str
+    transport: str = "stdio"            # stdio（本地命令）| http（Streamable HTTP）| sse
+    # stdio 形态：
+    command: str = ""
     args: list = []
-    env: list = []
+    env: list = []                     # 仅变量名；值在运行环境配置
+    # 远程形态（http/sse）：
+    url: str = ""
+    headers: dict = {}                 # 请求头 key→value（如 Authorization: Bearer xxx）
     homepage: str = ""
+
+
+class McpRegisterJsonIn(BaseModel):
+    """按标准 MCP 注册 JSON 注册：可为 {"mcpServers": {name: {...}}}、裸的 {name: {...}} 映射，或单个 server 对象。"""
+    config: dict
+    name: str = ""                     # 单 server 对象时用作名称（映射形态则取键名）
+    desc: str = ""
+    category: str = "自定义"
 
 
 def _ws_guard(ws: str):
@@ -2247,9 +2305,11 @@ def platform_skill_register(body: SkillRegisterIn, default_on: int = 0):
 @app.post("/api/platform/mcp/register")
 def platform_mcp_register(body: McpRegisterIn, default_on: int = 0):
     """注册一个平台全局 MCP（所有空间可见可绑）。default_on=1 则 copilot 默认挂载。"""
+    transport = _validate_mcp_register(body)
     mid = _slug_id("platform", body.name)
     _save_mcp(SYS_WS, {"id": mid, "name": body.name, "desc": body.desc, "category": body.category or "平台",
-                       "command": body.command, "args": body.args, "env": body.env,
+                       "transport": transport, "command": body.command, "args": body.args, "env": body.env,
+                       "url": body.url, "headers": body.headers,
                        "homepage": body.homepage, "source": "platform",
                        "scope": "platform", "default_on": int(default_on)})
     return {"ok": True, "id": mid, "scope": "platform", "default_on": int(default_on)}
@@ -2279,11 +2339,12 @@ def market_mcp(q: str = "", category: str = ""):
 def _save_mcp(ws, m):
     with db() as c:
         c.execute("INSERT OR REPLACE INTO installed_mcp "
-                  "(ws_id,id,name,summary,category,command,args,env,homepage,source,added_at,scope,default_on) "
-                  "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                  (ws, m["id"], m["name"], m["desc"], m["category"], m["command"],
-                   json.dumps(m["args"]), json.dumps(m["env"]), m.get("homepage", ""),
-                   m.get("source", "catalog"), now(), m.get("scope", "workspace"), int(m.get("default_on", 0))))
+                  "(ws_id,id,name,summary,category,command,args,env,homepage,source,added_at,scope,default_on,transport,url,headers) "
+                  "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                  (ws, m["id"], m["name"], m["desc"], m["category"], m.get("command") or "",
+                   json.dumps(m.get("args") or []), json.dumps(m.get("env") or []), m.get("homepage", ""),
+                   m.get("source", "catalog"), now(), m.get("scope", "workspace"), int(m.get("default_on", 0)),
+                   m.get("transport") or "stdio", m.get("url") or "", json.dumps(m.get("headers") or {})))
 
 
 @app.post("/api/market/mcp/{mid}/install")
@@ -2297,15 +2358,158 @@ def market_mcp_install(mid: str, ws: str):
     return {"ok": True, "id": mid, "name": m["name"]}
 
 
+def _normalize_transport(transport):
+    t = (transport or "stdio").strip().lower().replace("_", "-")
+    if t in ("streamable-http", "streamablehttp", "streamable"):
+        t = "http"
+    if t not in ("stdio", "http", "sse"):
+        raise HTTPException(422, "服务器类型只支持 stdio / http（Streamable HTTP）/ sse")
+    return t
+
+
+def _validate_mcp_register(body: "McpRegisterIn"):
+    """校验注册入参并回传规范化后的 transport。平台仅支持远程（http/sse）MCP，不支持本地命令(stdio)。"""
+    if not (body.name or "").strip():
+        raise HTTPException(422, "名称必填")
+    t = _normalize_transport(body.transport)
+    if t not in ("http", "sse"):
+        raise HTTPException(422, "仅支持注册远程 MCP（Streamable HTTP / SSE），不支持本地命令(stdio)")
+    if not (body.url or "").strip():
+        raise HTTPException(422, "远程 MCP 必须填服务器地址")
+    return t
+
+
+def _parse_mcp_config(cfg, fallback_name=""):
+    """把标准 MCP 注册 JSON 解析成规范化 server 列表。
+    支持三种形态：{"mcpServers":{name:{...}}}、裸的 {name:{...}} 映射、或单个 server 对象。"""
+    if not isinstance(cfg, dict):
+        raise HTTPException(422, "JSON 必须是对象（含 mcpServers 或单个 server 配置）")
+    servers = cfg.get("mcpServers") if isinstance(cfg.get("mcpServers"), dict) else None
+    if servers is None:
+        # 单 server 对象（含 command 或 url/type）→ 用 fallback 名；否则当作 {name: server} 映射
+        servers = {(fallback_name or "server"): cfg} if ("command" in cfg or "url" in cfg or "type" in cfg) else cfg
+    out = []
+    for name, spec in (servers or {}).items():
+        if not isinstance(spec, dict):
+            continue
+        t = _normalize_transport(spec.get("type") or ("http" if spec.get("url") else "stdio"))
+        if t not in ("http", "sse"):
+            raise HTTPException(422, f"server「{name}」是本地命令(stdio)类型，平台仅支持远程 MCP（http/sse），请改用带 url 的配置")
+        if not (spec.get("url") or "").strip():
+            raise HTTPException(422, f"server「{name}」缺少 url")
+        hd = spec.get("headers")
+        out.append({"name": name, "transport": t, "url": spec.get("url") or "",
+                    "headers": hd if isinstance(hd, dict) else {}})
+    if not out:
+        raise HTTPException(422, "未从 JSON 中解析出任何 MCP server")
+    return out
+
+
 @app.post("/api/market/mcp/register")
 def market_mcp_register(ws: str, body: McpRegisterIn):
-    """注册一个**自定义 MCP 接口**到当前空间（自填命令/参数/所需凭证）。"""
+    """注册一个**自定义 MCP 接口**到当前空间：本地 stdio（命令/参数/凭证）或远程 http/sse（地址/请求头）。"""
     _ws_guard(ws)
+    transport = _validate_mcp_register(body)
     mid = _slug_id("custom", body.name)
     _save_mcp(ws, {"id": mid, "name": body.name, "desc": body.desc, "category": body.category or "自定义",
-                   "command": body.command, "args": body.args, "env": body.env,
-                   "homepage": body.homepage, "source": "custom"})
+                   "transport": transport, "command": body.command, "args": body.args, "env": body.env,
+                   "url": body.url, "headers": body.headers, "homepage": body.homepage, "source": "custom"})
     return {"ok": True, "id": mid, "name": body.name}
+
+
+@app.post("/api/market/mcp/register-json")
+def market_mcp_register_json(ws: str, body: McpRegisterJsonIn):
+    """按**标准 MCP 注册 JSON**批量注册到当前空间（一次可含多个 server）。"""
+    _ws_guard(ws)
+    items = _parse_mcp_config(body.config, body.name)
+    saved = []
+    for it in items:
+        mid = _slug_id("custom", it["name"])
+        _save_mcp(ws, {"id": mid, "name": it["name"], "desc": body.desc, "category": body.category or "自定义",
+                       "transport": it["transport"], "command": it.get("command", ""), "args": it.get("args", []),
+                       "env": it.get("env", []), "url": it.get("url", ""), "headers": it.get("headers", {}),
+                       "source": "custom"})
+        saved.append({"id": mid, "name": it["name"]})
+    return {"ok": True, "count": len(saved), "items": saved}
+
+
+@app.post("/api/platform/mcp/register-json")
+def platform_mcp_register_json(body: McpRegisterJsonIn, default_on: int = 0):
+    """按标准 MCP 注册 JSON 发布为**平台全局**（全平台可见可引用）。"""
+    items = _parse_mcp_config(body.config, body.name)
+    saved = []
+    for it in items:
+        mid = _slug_id("platform", it["name"])
+        _save_mcp(SYS_WS, {"id": mid, "name": it["name"], "desc": body.desc, "category": body.category or "平台",
+                           "transport": it["transport"], "url": it.get("url", ""), "headers": it.get("headers", {}),
+                           "source": "platform", "scope": "platform", "default_on": int(default_on)})
+        saved.append({"id": mid, "name": it["name"]})
+    return {"ok": True, "count": len(saved), "items": saved, "scope": "platform"}
+
+
+def _probe_mcp_tools(url, headers, timeout=20):
+    """连接远程 MCP（Streamable HTTP）做 initialize + tools/list，返回工具接口清单。
+    纯 urllib 手写 JSON-RPC；同时兼容 application/json 与 text/event-stream 两种响应帧。"""
+    import urllib.request, urllib.error
+
+    def _post(payload, session=None):
+        h = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+        h.update(headers or {})
+        if session:
+            h["Mcp-Session-Id"] = session
+        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), method="POST", headers=h)
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            sid = r.headers.get("Mcp-Session-Id")
+            ctype = r.headers.get("Content-Type", "")
+            raw = r.read().decode("utf-8", "ignore")
+        if "text/event-stream" in ctype:
+            # SSE 帧：取最后一条 data: 行作为 JSON-RPC 响应
+            data = None
+            for line in raw.splitlines():
+                if line.startswith("data:"):
+                    data = line[5:].strip()
+            obj = json.loads(data) if data else {}
+        else:
+            obj = json.loads(raw) if raw.strip() else {}
+        return obj, sid
+
+    init = {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {"protocolVersion": "2025-06-18", "capabilities": {},
+                       "clientInfo": {"name": "aispace", "version": "1.0"}}}
+    resp, sid = _post(init)
+    if resp.get("error"):
+        raise RuntimeError(resp["error"].get("message") or "initialize 被拒绝")
+    # 通知 initialized（无 id，尽力而为）
+    try:
+        _post({"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}}, sid)
+    except Exception:
+        pass
+    resp2, _ = _post({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}, sid)
+    if resp2.get("error"):
+        raise RuntimeError(resp2["error"].get("message") or "tools/list 被拒绝")
+    tools = ((resp2.get("result") or {}).get("tools")) or []
+    return [{"name": t.get("name"), "description": (t.get("description") or "").strip(),
+             "input_schema": t.get("inputSchema") or {}} for t in tools]
+
+
+@app.post("/api/tools/{mid}/probe")
+def probe_mcp(mid: str, ws: str):
+    """探测某远程 MCP 提供的工具接口（initialize + tools/list）。仅 http 型可探测。"""
+    _ws_guard(ws)
+    with db() as c:
+        rows = _effective_rows(c, "installed_mcp", "mcp", ws, [mid])
+    if not rows:
+        raise HTTPException(404, "MCP 不存在或不在本空间可见范围")
+    d = dict(rows[0])
+    transport = (d.get("transport") or "stdio").lower()
+    if transport not in ("http", "sse"):
+        raise HTTPException(422, "仅远程 MCP（http/sse）支持探测接口")
+    headers = json.loads(d.get("headers") or "{}")
+    try:
+        tools = _probe_mcp_tools(d.get("url") or "", headers)
+    except Exception as e:
+        raise HTTPException(502, f"连接 MCP 失败：{e}")
+    return {"ok": True, "transport": transport, "count": len(tools), "tools": tools}
 
 
 @app.get("/api/tools")
@@ -2320,6 +2524,8 @@ def list_installed_mcp(ws: str):
     for d in rows:
         d["args"] = json.loads(d.get("args") or "[]")
         d["env"] = json.loads(d.get("env") or "[]")
+        d["headers"] = json.loads(d.get("headers") or "{}")
+        d["transport"] = d.get("transport") or "stdio"
         out.append(d)
     return out
 
