@@ -1,8 +1,8 @@
 ---
 name: 会话控制台（会话 Tab）
-last amended: 2026-06-29
-version: 2
-description: 一个新的「会话」Tab，按「创建人」维度聚合并展示我创建的 Agent（含 L1/L2/L3 三种运行方式）曾经活跃过的全部会话明细；只能看到自己是创建人的 Agent 的会话。
+last amended: 2026-07-06
+version: 3
+description: 一个新的「会话」Tab，按「创建人」维度聚合并展示我创建的 Agent（含 L1/L2/L3 三种运行方式）曾经活跃过的全部会话明细；只能看到自己是创建人的 Agent 的会话。明细回看与 Chat/Playground 完全对齐（Markdown 渲染 + 执行链路 + 用量脚注）。
 ---
 
 # 会话控制台 Feature Specification
@@ -98,7 +98,7 @@ description: 一个新的「会话」Tab，按「创建人」维度聚合并展�
 #### Acceptance Criteria
 1. WHEN 用户点击某条会话 THEN 系统 SHALL 打开该会话明细，按时间顺序完整展示每一轮 user / assistant 消息
 2. WHERE 会话明细 系统 SHALL 展示运行上下文：标题、会话 id、状态（标题区）；并在元数据条展示**列表未覆盖**的运行上下文——调用时的版本号（`v{agentVersion}`）、归集来源（平台界面/网关直连/云端回传）、创建时间（其余如所属 Agent/环境/发起人/最后活跃已在列表呈现，不在明细重复）
-3. WHERE 每条消息 系统 SHALL 按 user/assistant 区分气泡左右，并各自带时间戳；`role==='sys'` 的系统提示居中弱化展示
+3. WHERE 每条消息 系统 SHALL 按 user/assistant 区分气泡左右，并各自带时间戳；`role==='sys'` 的系统提示居中弱化展示。assistant 回复 SHALL 与 Chat/Playground 完全一致：按 Markdown(GFM) 渲染正文、在气泡上方展示执行链路（`TraceSteps`：思考/工具调用/MCP 徽标/子代理/图片占位/压缩标记）、在时间戳同行展示用量脚注（`UsageLine`：token/成本/耗时/模型/异常停止）；user 消息保持纯文本（见 Q-debug-trace「AI 回复按 Markdown 渲染」）
 4. WHERE 某轮消息标记为出错（`m.err`）系统 SHALL 在该轮可视化标注「出错」并以错误色气泡呈现，便于定位失败轮次
 5. WHERE 会话明细 系统 SHALL 为**只读**——创建人只能回看，不能在此续写或修改历史（底部固定「只读 · 创建人视角回看」提示）
 6. WHERE 明细抽屉 系统 SHALL 可左右拖拽改变宽度（默认 560px，可拖拽范围 420px～视口宽-120px）
@@ -106,7 +106,7 @@ description: 一个新的「会话」Tab，按「创建人」维度聚合并展�
 
 #### 引用 / 影响
 - 术语：Session, Version, Environment, 对话发起人
-- 组件：Drawer/详情页、消息气泡（复用 Chat/Playground 的消息渲染）、Descriptions（元数据）
+- 组件：Drawer/详情页、消息气泡（复用 Chat/Playground 的 `Md`/`TraceSteps`/`UsageLine` 渲染）、Descriptions（元数据）
 - 现有功能：复用 M 的 `GET /api/sessions/{id}`（扩展返回 agent/version/isolation/发起人等元数据）
 
 #### 待确认 / 假设

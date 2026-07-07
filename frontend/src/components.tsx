@@ -306,6 +306,7 @@ export function DebugPanel({ cfg, chatPath, streamPath, initialMsgs, onTurn }) {
   const [input, setInput] = useState('');
   const [sid, setSid] = useState(null);
   const [busy, setBusy] = useState(false);
+  const composingRef = React.useRef(false);  // 输入法组合中 → Enter 不发送
   const setBot = (text, extra) => setMsgs(m => { const c = [...m]; for (let i = c.length - 1; i >= 0; i--) { if (c[i].role === 'bot') { c[i] = { ...c[i], text, ...(extra || {}) }; break; } } return c; });
   // 更新最后一条 bot 消息的执行链路（fn 原地改 steps 数组副本）
   const upSteps = fn => setMsgs(m => { const c = [...m]; for (let i = c.length - 1; i >= 0; i--) { if (c[i].role === 'bot') { const steps = (c[i].steps || []).map(s => ({ ...s })); fn(steps); c[i] = { ...c[i], steps }; break; } } return c; });
@@ -393,7 +394,11 @@ export function DebugPanel({ cfg, chatPath, streamPath, initialMsgs, onTurn }) {
       </div>
       {busy && <div style={{ fontSize: 12, color: '#8A8C99', padding: '0 2px 8px', display: 'flex', alignItems: 'center', gap: 6 }}><Spin size="small" /> Agent 正在回复…（请等本轮结束）</div>}
       <div style={{ display: 'flex', gap: 8, paddingTop: 12, borderTop: '1px solid #F1F1F5' }}>
-        <Input placeholder={busy ? '回复中，请稍候…' : '输入消息，试跑当前 Agent…'} value={input} disabled={busy} onChange={e => setInput(e.target.value)} onPressEnter={send} />
+        <Input placeholder={busy ? '回复中，请稍候…' : '输入消息，试跑当前 Agent…'} value={input} disabled={busy}
+          onChange={e => setInput(e.target.value)}
+          onCompositionStart={() => (composingRef.current = true)}
+          onCompositionEnd={() => (composingRef.current = false)}
+          onPressEnter={e => { if (composingRef.current || e.nativeEvent?.isComposing || e.keyCode === 229) return; send(); }} />
         <Button type="primary" icon={<SendOutlined />} loading={busy} disabled={busy} onClick={send} />
       </div>
     </div>
@@ -1471,6 +1476,7 @@ export function ChatPanel({ curWs, isAdmin, onChanged }) {
   const [curSid, setCurSid] = useState(null);        // 当前会话 id（我方）；claude 续接 token 由后端持有
   const [renaming, setRenaming] = useState(null);    // 重命名中：{id, title}
   const [railCollapsed, setRailCollapsed] = useState(false); // 会话列表收起态
+  const composingRef = React.useRef(false);  // 输入法组合(拼音等)中 → Enter 不触发发送，避免半截拼音被发出
   const push = (role, text, extra) => setMsgs(m => [...m, { role, text, ts: now(), ...(extra || {}) }]);
   // 增量更新最后一条 bot 气泡（流式）
   const setBot = (text, extra) => setMsgs(m => { const c = [...m]; for (let i = c.length - 1; i >= 0; i--) { if (c[i].role === 'bot') { c[i] = { ...c[i], text, ...(extra || {}) }; break; } } return c; });
@@ -1775,7 +1781,11 @@ export function ChatPanel({ curWs, isAdmin, onChanged }) {
               </div>
             )}
             <div style={{ display: 'flex', gap: 8 }}>
-              <Input placeholder={busy ? '执行中…' : '输入消息，或 / 选择技能'} value={input} disabled={busy} onChange={e => onInput(e.target.value)} onPressEnter={send} />
+              <Input placeholder={busy ? '执行中…' : '输入消息，或 / 选择技能'} value={input} disabled={busy}
+                onChange={e => onInput(e.target.value)}
+                onCompositionStart={() => (composingRef.current = true)}
+                onCompositionEnd={() => (composingRef.current = false)}
+                onPressEnter={e => { if (composingRef.current || e.nativeEvent?.isComposing || e.keyCode === 229) return; send(); }} />
               <Button type="primary" icon={<SendOutlined />} onClick={send} loading={busy} />
             </div>
           </div>
@@ -2611,12 +2621,14 @@ export function SessionConsole({ me, onGoAgents, initialOpenId, onOpened }) {
                     const mine = m.role === 'user';
                     return (
                       <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: mine ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
-                        <div style={{ maxWidth: '86%', padding: '10px 13px', borderRadius: 10, fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', background: mine ? ACCENT : (m.err ? '#FDECEC' : '#F4F4F7'), color: mine ? '#fff' : (m.err ? '#C0392B' : '#2A2A33'), borderBottomRightRadius: mine ? 3 : 10, borderBottomLeftRadius: mine ? 10 : 3 }}>
-                          {m.text || ''}
+                        {!mine && <TraceSteps steps={m.steps} />}
+                        <div style={{ maxWidth: '86%', padding: '10px 13px', borderRadius: 10, fontSize: 13.5, lineHeight: 1.6, background: mine ? ACCENT : (m.err ? '#FDECEC' : '#F4F4F7'), color: mine ? '#fff' : (m.err ? '#C0392B' : '#2A2A33'), borderBottomRightRadius: mine ? 3 : 10, borderBottomLeftRadius: mine ? 10 : 3 }}>
+                          {mine ? <span style={{ whiteSpace: 'pre-wrap' }}>{m.text || ''}</span> : <Md text={m.text} />}
                         </div>
-                        <div style={{ ..._MONO, fontSize: 11, color: '#B6B6BE', marginTop: 4, padding: '0 2px' }}>
+                        <div style={{ ..._MONO, fontSize: 11, color: '#94A3B8', marginTop: 4, padding: '0 2px' }}>
                           {m.err ? <span style={{ color: '#C0392B', marginRight: 6 }}>出错</span> : null}
                           {m.ts ? (String(m.ts).length > 11 ? String(m.ts).slice(5, 16) : m.ts) : ''}
+                          {!mine && <UsageLine usage={m.usage} model={m.model} stop={m.stop} />}
                         </div>
                       </div>);
                   })}

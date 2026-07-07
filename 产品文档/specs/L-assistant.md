@@ -1,7 +1,7 @@
 ---
 name: Chat（统一入口 / Copilot）
-last amended: 2026-06-29
-version: 4
+last amended: 2026-07-06
+version: 5
 description: Chat 统一入口——会话轨、默认通用 agent、slash 唤起内置 skill；目标：平台所有功能都能通过 chat 解决
 ---
 
@@ -36,9 +36,10 @@ description: Chat 统一入口——会话轨、默认通用 agent、slash 唤�
 7. WHEN 用户输入 `/` THEN 系统 SHALL 弹出内置 skill 菜单（`/agent-creator`、`/schedule-creator`、`/skill-creator`，按输入子串过滤），点击或输入完整命令即进入该 skill；未知 `/` 命令 SHALL 提示可用命令
 8. WHERE 处于某 skill 系统 SHALL 显示当前技能 chip 并提供「× 退出」回到通用 agent
 9. WHERE skill 菜单由注册表（`CHAT_SKILLS`）驱动 系统 SHALL 支持后续扩展（内置/用户 skill 自动出现）
+10. WHILE 输入法处于组合态（拼音/五笔等 composition 中） 系统 SHALL **不**因回车触发发送——避免半截拼音（如「a gen t」）被误发；仅在组合结束后的回车才发送。判定依据组合事件（`compositionstart`/`compositionend`）与回车事件的 `isComposing`/`keyCode 229`。此规则同样适用于 Playground / Agent 配置调试的对话输入框
 
 #### 引用 / 影响
-- 组件：Chat 会话轨（可收起）、主对话区、Composer、slash 下拉菜单、当前技能 chip、连接态徽标、通用 Agent 开关、重命名弹窗
+- 组件：Chat 会话轨（可收起）、主对话区、Composer（输入法组合守卫）、slash 下拉菜单、当前技能 chip、连接态徽标、通用 Agent 开关、重命名弹窗
 - 实现：`components.tsx` `ChatPanel`（会话轨/主区/composer）、`GENERAL_INTRO`、`CHAT_SKILLS`；时间戳 `msgTime()` 仅显示 HH:mm
 - 现有功能：复用对话气泡；通用 agent 执行见下；与 Skill 概念(E)对齐
 - 设计决策：去掉三选一切换器，改为会话轨 + slash（更像 copilot）；输入框下方不得留无意义大空白
