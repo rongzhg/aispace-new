@@ -8,6 +8,9 @@
 |---|---|---|---|
 | P | [P-conversation-shell.md](./P-conversation-shell.md) | 会话轨重做（小号新建 / 整行卡片 / hover 操作 / 可收起）、左侧主导航可收起、QA 消息时间展示 | L(Chat)、I(Playground)、应用外壳(§03/§07) |
 | Q | [Q-debug-trace.md](./Q-debug-trace.md) | 调试执行链路（思考 / 工具链 / MCP 徽标 / 子代理 / 图片占位 / 压缩标记）+ 每轮用量脚注 + **AI 回复 Markdown 渲染**；三处统一、两 runtime 统一协议、流式+历史回放 | I(试跑/调试)、L(通用助手) |
+| R | [R-session-detail-ime.md](./R-session-detail-ime.md) | Session 明细页对齐 Chat/Playground 展示（Markdown 正文 + 执行链路 + 用量脚注，只读回放）+ 对话 Composer 输入法组合守卫（拼音未完不误发） | N(Session 控制台)、L(Chat)、I(Playground 调试) |
+
+> 说明：Q 的「AI 回复 Markdown 渲染」与 R 为当日晚间（20:00 后）增量；R 的两块对应主 spec N-session-console(v3) 与 L-assistant(v5, AC10) 的细化。
 
 ## 视觉规范一致性
 
