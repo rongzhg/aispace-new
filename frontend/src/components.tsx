@@ -2054,14 +2054,14 @@ export function SchedulePanel({ agents, onOpenSession }) {
   React.useEffect(() => { if (!hist) return; loadRuns(hist.dep); const t = setInterval(() => loadRuns(hist.dep), 5000); return () => clearInterval(t); }, [hist && hist.dep.id]);
 
   const dmAgent = dm && (agents || []).find(a => a.id === dm.agentId);
-  const openNew = () => setDm({ name: '', agentId: (agents || [])[0] && agents[0].id, versionPolicy: 'latest', isolation: 'L3', prompt: '', scheduleType: 'cron', preset: '0 9 * * *', cronExpr: '0 9 * * *', runAt: null });
-  const openEdit = d => setDm({ id: d.id, name: d.name, agentId: d.agentId, versionPolicy: d.versionPolicy, isolation: d.isolation, prompt: d.prompt, scheduleType: d.scheduleType, preset: CRON_PRESETS.some(p => p.value === d.cronExpr) ? d.cronExpr : '__custom', cronExpr: d.cronExpr || '', runAt: d.runAt });
+  const openNew = () => setDm({ name: '', agentId: (agents || [])[0] && agents[0].id, versionPolicy: 'latest', prompt: '', scheduleType: 'cron', preset: '0 9 * * *', cronExpr: '0 9 * * *', runAt: null });
+  const openEdit = d => setDm({ id: d.id, name: d.name, agentId: d.agentId, versionPolicy: d.versionPolicy, prompt: d.prompt, scheduleType: d.scheduleType, preset: CRON_PRESETS.some(p => p.value === d.cronExpr) ? d.cronExpr : '__custom', cronExpr: d.cronExpr || '', runAt: d.runAt });
   const save = async () => {
     if (!dm.name || !dm.name.trim()) { antMsg.warning('请填任务名'); return; }
     if (!dm.agentId) { antMsg.warning('请选 Agent'); return; }
     if (dm.scheduleType === 'cron' && !(dm.cronExpr || '').trim()) { antMsg.warning('请填 cron 表达式'); return; }
     if (dm.scheduleType === 'once' && !dm.runAt) { antMsg.warning('请选运行时刻'); return; }
-    const body = JSON.stringify({ name: dm.name.trim(), agentId: dm.agentId, versionPolicy: dm.versionPolicy, isolation: dm.isolation, prompt: dm.prompt || '', scheduleType: dm.scheduleType, cronExpr: dm.scheduleType === 'cron' ? dm.cronExpr.trim() : null, runAt: dm.scheduleType === 'once' ? dm.runAt : null });
+    const body = JSON.stringify({ name: dm.name.trim(), agentId: dm.agentId, versionPolicy: dm.versionPolicy, prompt: dm.prompt || '', scheduleType: dm.scheduleType, cronExpr: dm.scheduleType === 'cron' ? dm.cronExpr.trim() : null, runAt: dm.scheduleType === 'once' ? dm.runAt : null });
     setSaving(true);
     try {
       await apiCall(dm.id ? `/api/deployments/${dm.id}` : '/api/deployments', { method: dm.id ? 'PATCH' : 'POST', body });
@@ -2126,7 +2126,7 @@ export function SchedulePanel({ agents, onOpenSession }) {
                     <div style={{ marginTop: 3, color: '#64748B', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ ..._MONO }}>{d.agentName}</span>
                       {_neuPill(d.versionPolicy === 'latest' ? '跟随最新' : `钉住 v${(d.versionPolicy || '').split(':')[1] || '?'}`)}
-                      {_neuPill(d.isolation)}
+                      <Tooltip title={d.isolationPublished ? '运行环境跟随该 Agent 发布设置' : 'Agent 未发布，运行时默认用 共享 L1'}>{_neuPill(d.isolation)}</Tooltip>
                     </div>
                   </div>
                   <div style={{ width: 130, fontSize: 12, color: '#475569' }}>{_schedText(d)}</div>
@@ -2174,9 +2174,13 @@ export function SchedulePanel({ agents, onOpenSession }) {
           </div>
           <div><div style={{ fontSize: 12.5, color: '#64748B', fontWeight: 650, marginBottom: 6 }}>任务指令<span style={{ color: '#94A3B8', fontWeight: 400 }}>（每次运行发给 Agent 的开场消息，支持 {'{{date}}'} {'{{time}}'} {'{{task}}'}）</span></div>
             <Input.TextArea value={dm.prompt} rows={3} placeholder={'如：汇总 {{date}} 的竞品动态，输出 5 条要点'} onChange={e => setDm(v => ({ ...v, prompt: e.target.value }))} /></div>
-          <div><div style={{ fontSize: 12.5, color: '#64748B', fontWeight: 650, marginBottom: 6 }}>运行环境</div>
-            <Select value={dm.isolation} style={{ width: '100%' }} onChange={iso => setDm(v => ({ ...v, isolation: iso }))}
-              options={ISOLATIONS.map(o => ({ value: o.key, label: `${o.tag} · ${o.name}${o.key === 'L3' ? '（推荐：跑完即焚，最适合定时任务）' : ''}` }))} /></div>
+          <div><div style={{ fontSize: 12.5, color: '#64748B', fontWeight: 650, marginBottom: 6 }}>运行环境<span style={{ color: '#94A3B8', fontWeight: 400 }}>（跟随 Agent 发布设置）</span></div>
+            <div style={{ padding: '7px 11px', border: '1px solid #E2E8F0', borderRadius: 6, background: '#F8FAFC', fontSize: 12.5, color: '#475569', display: 'flex', alignItems: 'center', gap: 8 }}>
+              {dmAgent && dmAgent.publishedIsolation
+                ? <>复用发布环境 {_neuPill(`${dmAgent.publishedIsolation} · ${isoName(dmAgent.publishedIsolation)}`)}</>
+                : <span style={{ color: '#94A3B8' }}>该 Agent 尚未发布，运行时默认用 共享 L1</span>}
+            </div>
+            <div style={{ marginTop: 5, fontSize: 11.5, color: '#94A3B8' }}>运行环境在发布 Agent 时选择，定时任务直接复用，无需在此重复配置。</div></div>
           <div><div style={{ fontSize: 12.5, color: '#64748B', fontWeight: 650, marginBottom: 6 }}>调度</div>
             <Segmented block value={dm.scheduleType} onChange={st => setDm(v => ({ ...v, scheduleType: st }))}
               options={[{ label: '重复（cron）', value: 'cron' }, { label: '一次性', value: 'once' }, { label: '仅手动', value: 'manual' }]} />

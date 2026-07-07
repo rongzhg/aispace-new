@@ -415,7 +415,7 @@ def init_db():
                 -- 定时任务模板（对齐 Claude managed agents：deployment=agent+env+初始指令+可选 cron）
                 id TEXT PRIMARY KEY, ws_id TEXT, agent_id TEXT, name TEXT,
                 version_policy TEXT DEFAULT 'latest',   -- 'latest'（运行时解析）| 'pin:<n>'（钉住）
-                isolation TEXT DEFAULT 'L3',            -- 定时任务默认 L3 即用即弃
+                isolation TEXT DEFAULT 'L1',            -- 弃用：运行环境改为复用 Agent 发布环境（见 _pub_iso）
                 prompt TEXT,                            -- 初始 user.message，支持 {{date}}/{{time}}/{{task}}
                 schedule_type TEXT DEFAULT 'manual',    -- manual | once | cron
                 cron_expr TEXT, run_at TEXT,            -- cron 表达式 / 一次性时刻（YYYY-MM-DD HH:MM）
@@ -2300,7 +2300,6 @@ class DeploymentIn(BaseModel):
     agentId: Optional[str] = None
     name: Optional[str] = None
     versionPolicy: Optional[str] = None    # 'latest' | 'pin:<n>'
-    isolation: Optional[str] = None
     prompt: Optional[str] = None
     scheduleType: Optional[str] = None     # manual | once | cron
     cronExpr: Optional[str] = None
@@ -2308,15 +2307,23 @@ class DeploymentIn(BaseModel):
     enabled: Optional[bool] = None
 
 
+def _pub_iso(c, agent_id):
+    """定时任务的运行环境 = 该 Agent **发布时**选择的运行环境（复用，不单独配）；未发布则兜底共享 L1。"""
+    p = c.execute("SELECT isolation FROM published WHERE agent_id=?", (agent_id,)).fetchone()
+    return ((p and p["isolation"]) or "L1", bool(p))
+
+
 def _dep_row(c, r):
-    """deployment 行 → API 形状（附最近一次 run 概要）。"""
+    """deployment 行 → API 形状（附最近一次 run 概要）。运行环境取自 Agent 发布设置。"""
     last = c.execute("SELECT id,status,trigger_type,started_at,finished_at,session_id,error,resolved_version "
                      "FROM runs WHERE deployment_id=? ORDER BY started_at DESC LIMIT 1", (r["id"],)).fetchone()
     a = c.execute("SELECT name,version,framework FROM agents WHERE id=?", (r["agent_id"],)).fetchone()
+    iso, iso_published = _pub_iso(c, r["agent_id"])
     return {"id": r["id"], "wsId": r["ws_id"], "agentId": r["agent_id"],
             "agentName": (a and a["name"]) or r["agent_id"], "agentHead": a and a["version"],
             "framework": (a and a["framework"]) or "",
-            "name": r["name"], "versionPolicy": r["version_policy"], "isolation": r["isolation"],
+            "name": r["name"], "versionPolicy": r["version_policy"],
+            "isolation": iso, "isolationPublished": iso_published,   # 跟随 Agent 发布环境
             "prompt": r["prompt"], "scheduleType": r["schedule_type"], "cronExpr": r["cron_expr"],
             "runAt": r["run_at"], "nextRunAt": r["next_run_at"], "enabled": bool(r["enabled"]),
             "createdAt": r["created_at"], "updatedAt": r["updated_at"],
@@ -2351,11 +2358,12 @@ def deployment_create(body: DeploymentIn, x_user: Optional[str] = Header(None, a
     ts = now()
     nxt = _dep_next_run(st, body.cronExpr, body.runAt)
     with db() as c:
-        c.execute("INSERT INTO deployments (id,ws_id,agent_id,name,version_policy,isolation,prompt,"
+        # 运行环境不再单独存：触发/展示时都取 Agent 发布环境（isolation 列留作 schema 默认，弃用）
+        c.execute("INSERT INTO deployments (id,ws_id,agent_id,name,version_policy,prompt,"
                   "schedule_type,cron_expr,run_at,next_run_at,enabled,creator,created_at,updated_at) "
-                  "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                  "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                   (did, body.wsId or a.get("wsId"), body.agentId, body.name.strip(), vp,
-                   body.isolation or "L3", body.prompt or "", st, body.cronExpr, body.runAt,
+                   body.prompt or "", st, body.cronExpr, body.runAt,
                    nxt, 1, _copilot_user(x_user), ts, ts))
         return _dep_row(c, c.execute("SELECT * FROM deployments WHERE id=?", (did,)).fetchone())
 
@@ -2381,9 +2389,9 @@ def deployment_update(did: str, body: DeploymentIn):
         if not r:
             raise HTTPException(404, "任务不存在")
         cur = dict(r)
-        # 局部更新：None=不改
+        # 局部更新：None=不改（运行环境不在此列——跟随 Agent 发布设置）
         for col, val in (("name", body.name and body.name.strip()), ("version_policy", body.versionPolicy),
-                         ("isolation", body.isolation), ("prompt", body.prompt),
+                         ("prompt", body.prompt),
                          ("schedule_type", body.scheduleType), ("cron_expr", body.cronExpr),
                          ("run_at", body.runAt)):
             if val is not None:
@@ -2397,9 +2405,9 @@ def deployment_update(did: str, body: DeploymentIn):
                 raise HTTPException(400, f"cron 表达式无效：{e}")
         # 调度相关字段变化 → 重算 next_run_at；停用清空、启用重算
         cur["next_run_at"] = _dep_next_run(cur["schedule_type"], cur["cron_expr"], cur["run_at"]) if cur["enabled"] else None
-        c.execute("UPDATE deployments SET name=?,version_policy=?,isolation=?,prompt=?,schedule_type=?,"
+        c.execute("UPDATE deployments SET name=?,version_policy=?,prompt=?,schedule_type=?,"
                   "cron_expr=?,run_at=?,next_run_at=?,enabled=?,updated_at=? WHERE id=?",
-                  (cur["name"], cur["version_policy"], cur["isolation"], cur["prompt"], cur["schedule_type"],
+                  (cur["name"], cur["version_policy"], cur["prompt"], cur["schedule_type"],
                    cur["cron_expr"], cur["run_at"], cur["next_run_at"], cur["enabled"], now(), did))
         return _dep_row(c, c.execute("SELECT * FROM deployments WHERE id=?", (did,)).fetchone())
 
@@ -2424,7 +2432,7 @@ def deployment_runs(did: str, size: int = 50):
 
 
 def _fire_deployment(d, trigger_type):
-    """执行一次任务：解析版本 → 按任务的版本+隔离确保服务 → 建 session(source=schedule) → 跑 prompt → 记台账。
+    """执行一次任务：解析版本 → 按解析版本 + Agent 发布环境确保服务 → 建 session(source=schedule) → 跑 prompt → 记台账。
     在工作线程里跑（调度 tick 与 HTTP 请求都不阻塞）。异常一律落 run.error，不上抛。"""
     rid = "r" + uuid.uuid4().hex[:12]
     aid, user = d["agent_id"], (d.get("creator") or "u0")
@@ -2441,7 +2449,9 @@ def _fire_deployment(d, trigger_type):
         a = get_agent(aid)
         vp = d.get("version_policy") or "latest"
         ver = int(vp.split(":", 1)[1]) if vp.startswith("pin:") else a["version"]   # 版本在触发时解析
-        publish(aid, version=ver, isolation=d.get("isolation") or "L3")             # 单主实例：不一致则替换
+        with db() as c:
+            iso, _ = _pub_iso(c, aid)                                                # 运行环境复用 Agent 发布设置（未发布兜底 L1）
+        publish(aid, version=ver, isolation=iso)                                     # 单主实例：不一致则替换
         for _ in range(90):                                       # 云端（L2/L3）异步部署 → 等就绪，最长 3 分钟
             svc = SERVICES.get(aid) or {}
             if svc.get("status") != "deploying":

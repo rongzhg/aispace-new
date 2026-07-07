@@ -50,7 +50,7 @@
 | 发布 | Publish | 将某个已保存版本设为 Live，并按所选部署方式启动或替换运行服务 |
 | 部署方式 | DeploymentMode / Isolation | Live 运行服务的运行形态选择：共享 L1、独立 L2、即用即弃 L3；L0 租户隔离始终生效，不是用户可选项 |
 | 全局默认模型 / 每 Agent 模型 | default model / per-agent model | 某框架运行时的兜底默认模型 vs 单个 Agent 覆盖的模型（支持同框架多 Agent 各用各的模型） |
-| 定时任务 | Deployment | 可触发的任务模板 = Agent + 版本策略 + 运行环境 + 任务指令 + 调度；对齐 Claude Managed Agents 的 deployment，非「常驻服务开关」。见 specs/O |
+| 定时任务 | Deployment | 可触发的任务模板 = Agent + 版本策略 + 任务指令 + 调度（运行环境复用 Agent 发布设置）；对齐 Claude Managed Agents 的 deployment，非「常驻服务开关」。见 specs/O |
 | 版本策略 | VersionPolicy | 定时任务解析用哪一版的规则：`跟随最新`（触发时解析为 Head）或 `钉住 vN`；版本在**触发时**解析，回滚=改策略不算新部署 |
 | 调度 | Schedule / Cron | 定时任务的触发计划：重复(5 字段 cron)、一次性(指定时刻)、仅手动 |
 | 运行 | Run | 定时任务的一次执行台账：触发方式、解析版本、状态(运行中/成功/失败/跳过)、耗时、指向的会话 id；过程与结果即其会话 |

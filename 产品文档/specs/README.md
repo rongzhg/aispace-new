@@ -22,7 +22,7 @@ Claude Managed Agent 平台的功能 spec，按模块拆分。每份遵循 [../s
 | L | [L-assistant.md](./L-assistant.md) | Chat 统一入口：会话轨 + 默认通用 agent + slash 选内置 skill（/agent-creator、/skill-creator）| 🔸会话轨/阶段一已实现 + ⬜需求闭环/完整工具调用 |
 | M | [M-agent-api.md](./M-agent-api.md) | **Agent 调用契约与会话（Managed Agent 标准：Agent+Environment+Session）**——统一会话(服务端有状态)、事件驱动、稳定寻址 | 🔸Phase 1 已落地 + ⬜Phase 2–4 |
 | N | [N-session-console.md](./N-session-console.md) | **会话 Tab（会话控制台）**——按「创建人」聚合我创建的 Agent（L1/L2/L3）的全部会话、明细回看、检索过滤、全量归集 | 🔸MVP 列表/明细 + ⬜外部直连归集/全文检索 |
-| O | [O-scheduled-task.md](./O-scheduled-task.md) | **定时任务（Deployment 任务模板与调度）**——部署=可触发任务模板（Agent+版本策略+环境+指令+调度）；cron/一次性/手动触发均产出一次 Run + 一条 Session，运行台账深链会话 | 🔸MVP 模板/调度/触发/台账 + ⬜并发可配/超时重试/通知 |
+| O | [O-scheduled-task.md](./O-scheduled-task.md) | **定时任务（Deployment 任务模板与调度）**——部署=可触发任务模板（Agent+版本策略+指令+调度，运行环境复用 Agent 发布设置）；cron/一次性/手动触发均产出一次 Run + 一条 Session，运行台账深链会话 | 🔸MVP 模板/调度/触发/台账 + ⬜并发可配/超时重试/通知 |
 
 状态图例：✅已确认（多源自原始 spec）· 🔸MVP（demo 建议做）· ⬜后续 · ❓待确认（spec 内逐条标注）
 
