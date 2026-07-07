@@ -478,11 +478,20 @@ body {
   line-height: 1.2;
 }
 
-.session-new-btn {
-  margin-top: 9px;
-  height: 32px;
-  border-radius: 6px;
-  font-weight: 600;
+.session-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* 新建会话 = 轻量 rail action（小号按钮），非页面主 CTA（视觉规范 §07） */
+.session-toolbar-actions .ant-btn {
+  height: 26px;
+  padding-inline: 8px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 650;
 }
 
 .session-rail-collapsed {
@@ -693,6 +702,161 @@ body {
   min-height: 0;
   overflow: auto;
   padding: 6px 6px 8px;
+}
+
+/* ===== 调试执行链路（思考 / 工具调用）通用展示 ===== */
+.trace-block {
+  width: 100%;
+  max-width: 82%;
+  margin-bottom: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 2px 4px;
+}
+
+.trace-step + .trace-step {
+  border-top: 1px dashed #eef1f5;
+}
+
+.trace-summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 6px 6px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  color: #475569;
+  user-select: none;
+}
+
+.trace-summary::-webkit-details-marker {
+  display: none;
+}
+
+.trace-caret {
+  flex-shrink: 0;
+  color: #b6bcc8;
+  font-size: 10px;
+  transition: transform 0.12s;
+}
+
+details[open] > .trace-summary .trace-caret {
+  transform: rotate(90deg);
+}
+
+.trace-kind {
+  flex-shrink: 0;
+  font-weight: 650;
+  color: #334155;
+}
+
+.trace-tool-name {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11.5px;
+  color: #5a5c6b;
+  background: #fafafb;
+  border: 1px solid #f1f1f5;
+  border-radius: 6px;
+  padding: 0 6px;
+  line-height: 18px;
+}
+
+.trace-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #94a3b8;
+  font-size: 11.5px;
+}
+
+.trace-status {
+  flex-shrink: 0;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.trace-status--ok { color: #16a34a; }
+.trace-status--err { color: #dc2626; }
+.trace-status--run { color: #b45309; }
+
+.trace-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.trace-info::before,
+.trace-info::after {
+  content: "";
+  flex: 1;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.trace-badge {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 18px;
+}
+
+.trace-badge--mcp {
+  background: #eef0ff;
+  color: #4f46e5;
+}
+
+.trace-think-body {
+  padding: 2px 10px 9px 25px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.trace-io {
+  padding: 0 10px 9px 25px;
+}
+
+.trace-io-label {
+  margin-bottom: 3px;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.trace-io pre {
+  margin: 0;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px solid #eef1f5;
+  border-radius: 6px;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #475569;
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .playground-main {

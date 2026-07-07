@@ -202,6 +202,86 @@ export const pill = (bg, color) => ({ background: bg, color, fontSize: 11, paddi
 export const msgTime = ts => (ts || '').slice(11, 16);
 
 /* ================= 调试面板 (Spec I · mock) ================= */
+// 执行链路通用展示：steps = [{type:'think',text} | {type:'tool',name,input,output,is_error,running} | {type:'info',text}]
+// 原生 <details> 折叠，零额外状态；流式与历史回放共用同一结构。
+// 工具步骤按名称识别语义：mcp__<server>__<tool> → MCP 徽标；Task → 子代理。
+function TraceSteps({ steps }) {
+  if (!steps || !steps.length) return null;
+  const fmtIn = v => { try { return typeof v === 'string' ? v : JSON.stringify(v, null, 2); } catch { return String(v); } };
+  return (
+    <div className="trace-block">
+      {steps.map((s, i) => {
+        if (s.type === 'info') return <div key={i} className="trace-info">{s.text}</div>;
+        if (s.type === 'think') return (
+          <details key={i} className="trace-step">
+            <summary className="trace-summary">
+              <span className="trace-caret">▸</span>
+              <BulbOutlined style={{ color: '#B45309', fontSize: 12 }} />
+              <span className="trace-kind">思考</span>
+              <span className="trace-preview">{(s.text || '').replace(/\s+/g, ' ').slice(0, 80)}</span>
+            </summary>
+            <div className="trace-think-body">{s.text}</div>
+          </details>
+        );
+        // 工具步骤：识别 MCP / 子代理
+        const mcp = /^mcp__/.test(s.name || '') ? (s.name || '').split('__') : null; // [mcp, server, tool...]
+        const isTask = s.name === 'Task';
+        const label = isTask ? '子代理' : mcp ? 'MCP' : '工具';
+        const icon = isTask
+          ? <RobotOutlined style={{ color: '#2563EB', fontSize: 12 }} />
+          : <ToolOutlined style={{ color: '#4F46E5', fontSize: 12 }} />;
+        const nameEl = mcp
+          ? <><span className="trace-badge trace-badge--mcp">{mcp[1]}</span><span className="trace-tool-name">{mcp.slice(2).join('__')}</span></>
+          : <span className="trace-tool-name">{s.name || 'tool'}</span>;
+        const taskPreview = isTask && s.input ? String(s.input.description || s.input.prompt || '').replace(/\s+/g, ' ').slice(0, 60) : '';
+        return (
+          <details key={i} className="trace-step">
+            <summary className="trace-summary">
+              <span className="trace-caret">▸</span>
+              {icon}
+              <span className="trace-kind">{label}</span>
+              {nameEl}
+              {taskPreview && <span className="trace-preview">{taskPreview}</span>}
+              {s.running
+                ? <span className="trace-status trace-status--run"><Spin size="small" /> 执行中</span>
+                : s.is_error
+                  ? <span className="trace-status trace-status--err">✕ 失败</span>
+                  : s.output != null ? <span className="trace-status trace-status--ok">✓ 完成</span> : null}
+            </summary>
+            {s.input != null && Object.keys(s.input || {}).length > 0 && (
+              <div className="trace-io"><div className="trace-io-label">入参</div><pre>{fmtIn(s.input)}</pre></div>
+            )}
+            {s.output != null && s.output !== '' && (
+              <div className="trace-io"><div className="trace-io-label">结果</div><pre>{s.output}</pre></div>
+            )}
+          </details>
+        );
+      })}
+    </div>
+  );
+}
+
+// 用量脚注：↑输入 ↓输出 tokens · 成本 · 耗时 · 模型（有什么显什么）
+const fmtTok = n => (n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n));
+function UsageLine({ usage, model, stop }) {
+  if (!usage && !model && !stop) return null;
+  const u = usage || {};
+  const parts = [];
+  if (u.input_tokens != null || u.output_tokens != null)
+    parts.push(`↑${fmtTok(u.input_tokens || 0)} ↓${fmtTok(u.output_tokens || 0)} tok`);
+  if (u.cache_read_input_tokens) parts.push(`缓存 ${fmtTok(u.cache_read_input_tokens)}`);
+  if (u.cost_usd != null) parts.push(`$${Number(u.cost_usd).toFixed(4)}`);
+  if (u.duration_ms != null) parts.push(`${(u.duration_ms / 1000).toFixed(1)}s`);
+  if (u.num_turns) parts.push(`${u.num_turns} 轮`);
+  if (model) parts.push(model);
+  return (
+    <span>
+      {parts.length > 0 && <span style={{ fontFamily: 'ui-monospace,Menlo,monospace' }}> · {parts.join(' · ')}</span>}
+      {stop && <span style={{ color: '#B45309', fontWeight: 600 }}> · ⚠ {stop}</span>}
+    </span>
+  );
+}
+
 export function DebugPanel({ cfg, chatPath, streamPath, initialMsgs, onTurn }) {
   const sysText = API_ON
     ? `调试 · 模型 ${cfg.model || '未选'} · 本机 ${cfg.framework === 'OPENCLAW' ? 'OpenClaw Gateway' : 'Claude Code'} 运行`
@@ -216,6 +296,9 @@ export function DebugPanel({ cfg, chatPath, streamPath, initialMsgs, onTurn }) {
   const [sid, setSid] = useState(null);
   const [busy, setBusy] = useState(false);
   const setBot = (text, extra) => setMsgs(m => { const c = [...m]; for (let i = c.length - 1; i >= 0; i--) { if (c[i].role === 'bot') { c[i] = { ...c[i], text, ...(extra || {}) }; break; } } return c; });
+  // 更新最后一条 bot 消息的执行链路（fn 原地改 steps 数组副本）
+  const upSteps = fn => setMsgs(m => { const c = [...m]; for (let i = c.length - 1; i >= 0; i--) { if (c[i].role === 'bot') { const steps = (c[i].steps || []).map(s => ({ ...s })); fn(steps); c[i] = { ...c[i], steps }; break; } } return c; });
+  const finishSteps = () => upSteps(steps => steps.forEach(s => { if (s.running) s.running = false; }));
   const send = async () => {
     if (!input.trim() || busy) return;
     const q = input.trim();
@@ -243,12 +326,16 @@ export function DebugPanel({ cfg, chatPath, streamPath, initialMsgs, onTurn }) {
             raw.split('\n').forEach(l => { if (l.startsWith('event:')) ev = l.slice(6).trim(); else if (l.startsWith('data:')) data += l.slice(5).trim(); });
             if (!data) continue; let d; try { d = JSON.parse(data); } catch (e) { continue; }
             if (ev === 'delta') { acc += d.text || ''; setBot(acc, { pending: false }); }
-            else if (ev === 'done') { if (d.session_id) setSid(d.session_id); acc = d.reply || acc; setBot(acc, { pending: false }); }
-            else if (ev === 'error') { setBot('错误：' + (d.reply || ''), { pending: false, err: true }); }
+            else if (ev === 'think') upSteps(steps => { const last = steps[steps.length - 1]; if (last && last.type === 'think' && !last.done) last.text = (last.text || '') + (d.text || ''); else steps.push({ type: 'think', text: d.text || '' }); });
+            else if (ev === 'tool') upSteps(steps => { steps.forEach(s => { if (s.type === 'think') s.done = true; }); steps.push({ type: 'tool', id: d.id, name: d.name, input: d.input, running: true }); });
+            else if (ev === 'tool_result') upSteps(steps => { for (let j = steps.length - 1; j >= 0; j--) { if (steps[j].type === 'tool' && steps[j].id === d.id) { steps[j] = { ...steps[j], output: d.output, is_error: !!d.is_error, running: false }; break; } } });
+            else if (ev === 'info') upSteps(steps => steps.push({ type: 'info', text: d.text || '' }));
+            else if (ev === 'done') { if (d.session_id) setSid(d.session_id); acc = d.reply || acc; finishSteps(); setBot(acc, { pending: false, ...(d.usage ? { usage: d.usage } : {}), ...(d.model ? { model: d.model } : {}), ...(d.stop ? { stop: d.stop } : {}) }); }
+            else if (ev === 'error') { finishSteps(); setBot('错误：' + (d.reply || ''), { pending: false, err: true }); }
           }
         }
         if (!acc) setBot('(空响应)', { pending: false });
-      } catch (e) { setBot('调用失败：' + e.message, { pending: false, err: true }); }
+      } catch (e) { finishSteps(); setBot('调用失败：' + e.message, { pending: false, err: true }); }
       finally { setBusy(false); onTurn && onTurn(); }
       return;
     }
@@ -257,7 +344,7 @@ export function DebugPanel({ cfg, chatPath, streamPath, initialMsgs, onTurn }) {
     try {
       const d = await apiCall(chatPath || `/api/agents/${cfg.id || 'new'}/chat`, { method: 'POST', body: JSON.stringify({ message: q, config: cfg, session_id: sid }) });
       if (d.session_id) setSid(d.session_id);
-      setMsgs(m => m.filter(x => !x.pending).concat({ role: 'bot', text: d.reply || '(空响应)', err: d.engine === 'error', ts: now() }));
+      setMsgs(m => m.filter(x => !x.pending).concat({ role: 'bot', text: d.reply || '(空响应)', err: d.engine === 'error', ...(d.steps && d.steps.length ? { steps: d.steps } : {}), ...(d.usage ? { usage: d.usage } : {}), ...(d.model ? { model: d.model } : {}), ...(d.stop ? { stop: d.stop } : {}), ts: now() }));
     } catch (e) {
       setMsgs(m => m.filter(x => !x.pending).concat({ role: 'bot', text: '调用失败：' + e.message, err: true, ts: now() }));
     } finally { setBusy(false); onTurn && onTurn(); }
@@ -270,16 +357,24 @@ export function DebugPanel({ cfg, chatPath, streamPath, initialMsgs, onTurn }) {
           <div key={i} style={{ textAlign: 'center', fontSize: 12, color: '#8A8C99', margin: '8px 0 16px' }}>{m.text}</div>
         ) : (
           <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
+            {m.role === 'bot' && <TraceSteps steps={m.steps} />}
             <div style={{
               maxWidth: '82%', padding: '10px 13px', borderRadius: 12, fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap',
               background: m.role === 'user' ? ACCENT : '#F4F4F7', color: m.role === 'user' ? '#fff' : (m.err ? '#D4380D' : '#2A2A33'),
               borderBottomRightRadius: m.role === 'user' ? 3 : 12, borderBottomLeftRadius: m.role === 'bot' ? 3 : 12,
             }}>
               {m.role === 'bot' && m.pending && !m.text
-                ? <span style={{ display: 'inline-flex', alignItems: 'center' }} aria-label="正在回复"><span className="pg-dot" style={{ animationDelay: '0s' }} /><span className="pg-dot" style={{ animationDelay: '.18s' }} /><span className="pg-dot" style={{ animationDelay: '.36s' }} /></span>
+                ? ((m.steps || []).length
+                    ? <span style={{ color: '#8A8C99', fontSize: 12.5 }}>执行中…（上方为实时链路）</span>
+                    : <span style={{ display: 'inline-flex', alignItems: 'center' }} aria-label="正在回复"><span className="pg-dot" style={{ animationDelay: '0s' }} /><span className="pg-dot" style={{ animationDelay: '.18s' }} /><span className="pg-dot" style={{ animationDelay: '.36s' }} /></span>)
                 : <>{m.text}{m.role === 'bot' && m.pending ? <span className="pg-caret">▋</span> : null}</>}
             </div>
-            {msgTime(m.ts) && <div style={{ fontSize: 11, color: '#B0B3BE', margin: '4px 2px 0' }}>{msgTime(m.ts)}</div>}
+            {(msgTime(m.ts) || m.usage || m.model || m.stop) && (
+              <div style={{ fontSize: 11, color: '#94A3B8', margin: '4px 2px 0' }}>
+                {msgTime(m.ts)}
+                {m.role === 'bot' && <UsageLine usage={m.usage} model={m.model} stop={m.stop} />}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -1299,9 +1394,11 @@ export function Playground({ agents, embedded }) {
                           <div className="playground-session-label">会话</div>
                           <div className="playground-session-count">{pgSessions.length} 条</div>
                         </div>
-                        <Tooltip title="收起会话列表"><Button type="text" size="small" icon={<MenuFoldOutlined />} onClick={() => setPgRailCollapsed(true)} /></Tooltip>
+                        <div className="session-toolbar-actions">
+                          <Button size="small" icon={<PlusOutlined />} onClick={() => sel && newPgSession(sel.id, { reuseEmpty: true })}>新建</Button>
+                          <Tooltip title="收起会话列表"><Button type="text" size="small" icon={<MenuFoldOutlined />} onClick={() => setPgRailCollapsed(true)} /></Tooltip>
+                        </div>
                       </div>
-                      <Button className="session-new-btn" block icon={<PlusOutlined />} style={{ color: ACCENT, borderColor: '#dbe1ea' }} onClick={() => sel && newPgSession(sel.id, { reuseEmpty: true })}>新建会话</Button>
                     </div>
                     <div className="playground-session-list">
                       {pgSessions.length === 0
@@ -1364,6 +1461,9 @@ export function ChatPanel({ curWs, isAdmin, onChanged }) {
   const push = (role, text, extra) => setMsgs(m => [...m, { role, text, ts: now(), ...(extra || {}) }]);
   // 增量更新最后一条 bot 气泡（流式）
   const setBot = (text, extra) => setMsgs(m => { const c = [...m]; for (let i = c.length - 1; i >= 0; i--) { if (c[i].role === 'bot') { c[i] = { ...c[i], text, ...(extra || {}) }; break; } } return c; });
+  // 更新最后一条 bot 的执行链路（think/tool/info），与 DebugPanel 同构
+  const upSteps = fn => setMsgs(m => { const c = [...m]; for (let i = c.length - 1; i >= 0; i--) { if (c[i].role === 'bot') { const steps = (c[i].steps || []).map(s => ({ ...s })); fn(steps); c[i] = { ...c[i], steps }; break; } } return c; });
+  const finishSteps = () => upSteps(steps => steps.forEach(s => { if (s.running) s.running = false; }));
 
   // 连接态轮询（通用 agent 按用户、与空间无关；ws 仅作回显）
   React.useEffect(() => {
@@ -1458,8 +1558,12 @@ export function ChatPanel({ curWs, isAdmin, onChanged }) {
           raw.split('\n').forEach(l => { if (l.startsWith('event:')) ev = l.slice(6).trim(); else if (l.startsWith('data:')) data += l.slice(5).trim(); });
           if (!data) continue; let d; try { d = JSON.parse(data); } catch (e) { continue; }
           if (ev === 'delta') { acc += d.text || ''; setBot(acc, { pending: false }); }
-          else if (ev === 'done') { acc = d.reply || acc; setBot(acc, { pending: false }); }
-          else if (ev === 'error') { acc = d.reply || acc || '出错'; setBot(acc, { pending: false, err: true }); }
+          else if (ev === 'think') upSteps(steps => { const last = steps[steps.length - 1]; if (last && last.type === 'think' && !last.done) last.text = (last.text || '') + (d.text || ''); else steps.push({ type: 'think', text: d.text || '' }); });
+          else if (ev === 'tool') upSteps(steps => { steps.forEach(s => { if (s.type === 'think') s.done = true; }); steps.push({ type: 'tool', id: d.id, name: d.name, input: d.input, running: true }); });
+          else if (ev === 'tool_result') upSteps(steps => { for (let j = steps.length - 1; j >= 0; j--) { if (steps[j].type === 'tool' && steps[j].id === d.id) { steps[j] = { ...steps[j], output: d.output, is_error: !!d.is_error, running: false }; break; } } });
+          else if (ev === 'info') upSteps(steps => steps.push({ type: 'info', text: d.text || '' }));
+          else if (ev === 'done') { acc = d.reply || acc; finishSteps(); setBot(acc, { pending: false, ...(d.usage ? { usage: d.usage } : {}), ...(d.model ? { model: d.model } : {}), ...(d.stop ? { stop: d.stop } : {}) }); }
+          else if (ev === 'error') { acc = d.reply || acc || '出错'; finishSteps(); setBot(acc, { pending: false, err: true }); }
         }
       }
       if (!acc.trim()) setBot('（通用助手无回复）', { pending: false });
@@ -1580,9 +1684,11 @@ export function ChatPanel({ curWs, isAdmin, onChanged }) {
                     <div className="chat-session-label">会话</div>
                     <div className="chat-session-count">{sessions.length} 条</div>
                   </div>
-                  <Tooltip title="收起会话列表"><Button type="text" size="small" icon={<MenuFoldOutlined />} onClick={() => setRailCollapsed(true)} /></Tooltip>
+                  <div className="session-toolbar-actions">
+                    <Button size="small" icon={<PlusOutlined />} onClick={newSession}>新建</Button>
+                    <Tooltip title="收起会话列表"><Button type="text" size="small" icon={<MenuFoldOutlined />} onClick={() => setRailCollapsed(true)} /></Tooltip>
+                  </div>
                 </div>
-                <Button className="session-new-btn" block icon={<PlusOutlined />} style={{ color: ACCENT, borderColor: '#dbe1ea' }} onClick={newSession}>新建会话</Button>
               </div>
               <div style={{ flex: 1, overflow: 'auto', padding: '6px 6px 8px' }}>
                 {sessions.length === 0
@@ -1618,10 +1724,20 @@ export function ChatPanel({ curWs, isAdmin, onChanged }) {
             {msgs.map((m, i) => m.role === 'sys'
               ? <div key={i} style={{ textAlign: 'center', fontSize: 12, color: '#A6A8B4', margin: '6px 0 14px' }}>{m.text}</div>
               : <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
+                  {m.role === 'bot' && <TraceSteps steps={m.steps} />}
                   <div style={{ maxWidth: '82%', padding: '10px 13px', borderRadius: 12, fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', background: m.role === 'user' ? ACCENT : (m.err ? '#FDECEC' : '#F4F4F7'), color: m.role === 'user' ? '#fff' : (m.err ? '#B42318' : '#2A2A33'), borderBottomRightRadius: m.role === 'user' ? 3 : 12, borderBottomLeftRadius: m.role === 'bot' ? 3 : 12 }}>
-                    {m.text || (m.pending ? <span style={{ color: '#8A8C99' }}><Spin size="small" style={{ marginRight: 8 }} />通用 Agent 思考中…</span> : '')}
+                    {m.text || (m.pending
+                      ? ((m.steps || []).length
+                          ? <span style={{ color: '#8A8C99', fontSize: 12.5 }}>执行中…（上方为实时链路）</span>
+                          : <span style={{ color: '#8A8C99' }}><Spin size="small" style={{ marginRight: 8 }} />通用 Agent 思考中…</span>)
+                      : '')}
                   </div>
-                  {msgTime(m.ts) && <div style={{ fontSize: 11, color: '#B0B3BE', margin: '4px 2px 0' }}>{msgTime(m.ts)}</div>}
+                  {(msgTime(m.ts) || m.usage || m.model || m.stop) && (
+                    <div style={{ fontSize: 11, color: '#94A3B8', margin: '4px 2px 0' }}>
+                      {msgTime(m.ts)}
+                      {m.role === 'bot' && <UsageLine usage={m.usage} model={m.model} stop={m.stop} />}
+                    </div>
+                  )}
                 </div>)}
           </div>
           <div className="chat-composer" style={{ position: 'relative' }}>

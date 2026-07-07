@@ -238,7 +238,7 @@ def deregister_openclaw_agent(agent_id: str):
 
 
 def parse_agent_output(stdout: str, returncode: int, stderr: str, session_id):
-    """解析 `openclaw agent --json` 输出 → {engine, reply, session_id[, model]}。纯函数，便于单测。
+    """解析 `openclaw agent --json` 输出 → {engine, reply, session_id[, model][, session_file]}。纯函数，便于单测。
     兼容两种形态：直接 {payloads,meta}，或包一层 {runId,status,result:{payloads,meta}}。"""
     d = _extract_json(stdout)
     if d is None:
@@ -255,12 +255,87 @@ def parse_agent_output(stdout: str, returncode: int, stderr: str, session_id):
     if payloads and isinstance(payloads[0], dict):
         reply = payloads[0].get("text") or ""
     reply = reply or meta.get("finalAssistantVisibleText") or ""
-    sid = (meta.get("agentMeta") or {}).get("sessionId") or session_id
-    model = (meta.get("executionTrace") or {}).get("winnerModel")
+    am = meta.get("agentMeta") or {}
+    sid = am.get("sessionId") or session_id
+    model = (meta.get("executionTrace") or {}).get("winnerModel") or am.get("model")
     out = {"engine": "openclaw", "reply": reply, "session_id": sid}
     if model:
         out["model"] = model
+    # 用量/耗时（OpenClaw 字段名 → 与 Claude Code 适配器统一的 usage 结构）
+    u = am.get("usage") or {}
+    usage = {}
+    if u.get("input") is not None:
+        usage["input_tokens"] = u["input"]
+    if u.get("output") is not None:
+        usage["output_tokens"] = u["output"]
+    if u.get("cacheRead") is not None:
+        usage["cache_read_input_tokens"] = u["cacheRead"]
+    if u.get("cacheWrite") is not None:
+        usage["cache_creation_input_tokens"] = u["cacheWrite"]
+    if meta.get("durationMs") is not None:
+        usage["duration_ms"] = meta["durationMs"]
+    if usage:
+        out["usage"] = usage
+    if am.get("sessionFile"):
+        out["session_file"] = am["sessionFile"]   # 会话 transcript：执行链路(steps)从这里还原
     return out
+
+
+def turn_steps_from_session(session_file):
+    """从 OpenClaw 会话 transcript（JSONL）抽取**最后一轮**的执行链路 steps，
+    与 Claude Code 适配器同构：[{type:'think',text}] / [{type:'tool',id,name,input,output,is_error}]。
+    transcript 实测结构（2026.6.x）：message.role=assistant 的 content 里有
+    thinking/toolCall(id,name,arguments)/text 块；role=toolResult 带 toolCallId 与 content[].text。"""
+    try:
+        with open(session_file, encoding="utf-8") as f:
+            lines = f.read().strip().splitlines()
+    except Exception:
+        return []
+    msgs = []
+    for ln in lines:
+        try:
+            d = json.loads(ln)
+        except Exception:
+            continue
+        if d.get("type") == "message":
+            msgs.append(d.get("message") or {})
+    start = 0                                    # 本轮 = 最后一条 user 消息之后
+    for i, m in enumerate(msgs):
+        if m.get("role") == "user":
+            start = i + 1
+    steps = []
+    for m in msgs[start:]:
+        role = m.get("role")
+        if role == "assistant":
+            for blk in (m.get("content") or []):
+                if not isinstance(blk, dict):
+                    continue
+                if blk.get("type") == "thinking":
+                    txt = (blk.get("thinking") or blk.get("text") or "").strip()
+                    if txt:                       # 加密思考(仅 signature、无明文)跳过
+                        steps.append({"type": "think", "text": txt})
+                elif blk.get("type") == "toolCall":
+                    steps.append({"type": "tool", "id": blk.get("id"), "name": blk.get("name"),
+                                  "input": blk.get("arguments") or {}})
+        elif role == "toolResult":
+            parts = []
+            for b in (m.get("content") or []):
+                if not isinstance(b, dict):
+                    continue
+                if b.get("type") == "text":
+                    parts.append(b.get("text", ""))
+                elif b.get("type") == "image":
+                    parts.append("[图片]")
+            out = "\n".join(parts)
+            det = m.get("details") or {}
+            is_err = bool(det.get("exitCode")) if "exitCode" in det \
+                else det.get("status") not in (None, "completed", "success")
+            for s in reversed(steps):
+                if s.get("type") == "tool" and s.get("id") == m.get("toolCallId"):
+                    s["output"] = str(out or "")[:4000]
+                    s["is_error"] = is_err
+                    break
+    return steps
 
 
 # ============ OpenClaw 调用：真实 CLI 优先，未安装回退 mock ============
@@ -270,23 +345,34 @@ def oc_invoke(agent: dict, message: str, session_id: Optional[str]):
     agent_id = agent["agent_id"]
     workdir = agent["dir"]
     if b:
-        # 真实路径：openclaw agent 一次回合，--agent 按 id 路由，--session-id 续多轮
+        # 真实路径：openclaw agent 一次回合，--agent 按 id 路由，--session-id 续多轮。
+        # --thinking medium：让模型输出思考过程（transcript 落 thinking 块 → 调试链路展示）；
+        # 个别模型/配置不支持时自动回退不带 thinking 重跑。
         ocid = _oc_id(agent_id)
-        cmd = [b, "agent", "--agent", ocid, "-m", message, "--json"]
+        base = [b, "agent", "--agent", ocid, "-m", message, "--json"]
         # 未配对/无 gateway 凭据的环境（如云端 ECS）用嵌入式本地模式跑，绕开 gateway websocket 鉴权；
         # 本机 Mac 不设该变量，仍走已配对的 gateway 模式。输出形态一致（{payloads,meta}）。
         if os.environ.get("OPENCLAW_LOCAL"):
-            cmd += ["--local"]
+            base += ["--local"]
         if session_id:
-            cmd += ["--session-id", session_id]
+            base += ["--session-id", session_id]
         try:
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=300,
-                                 cwd=workdir, env=_oc_env(b), stdin=subprocess.DEVNULL)
+            res = subprocess.run(base + ["--thinking", "medium"], capture_output=True, text=True,
+                                 timeout=300, cwd=workdir, env=_oc_env(b), stdin=subprocess.DEVNULL)
+            if res.returncode != 0 and "thinking" in ((res.stderr or "") + (res.stdout or "")).lower():
+                res = subprocess.run(base, capture_output=True, text=True, timeout=300,
+                                     cwd=workdir, env=_oc_env(b), stdin=subprocess.DEVNULL)
         except subprocess.TimeoutExpired:
             return {"engine": "error", "reply": "openclaw 运行超时（>300s）", "session_id": session_id}
         except Exception as e:
             return {"engine": "error", "reply": str(e), "session_id": session_id}
-        return parse_agent_output(res.stdout, res.returncode, res.stderr, session_id)
+        r = parse_agent_output(res.stdout, res.returncode, res.stderr, session_id)
+        sf = r.pop("session_file", None)
+        if sf:                                    # 从 transcript 还原本轮执行链路（思考/工具调用）
+            steps = turn_steps_from_session(sf)
+            if steps:
+                r["steps"] = steps
+        return r
     # ---- mock 回退：按该 agent 的人设回应，证明 Gateway 已正确路由到对应 agent ----
     sid = session_id or f"oc-{agent_id}-{uuid.uuid4().hex[:8]}"
     key = (agent_id, sid)
@@ -362,11 +448,22 @@ def chat_stream(b: ChatIn):
     def gen():
         r = oc_invoke(agent, b.message, b.session_id)
         reply = r.get("reply", "")
+        # 先按序回放执行链路（think/tool/tool_result），与 Claude Code 适配器 SSE 协议一致
+        for s in (r.get("steps") or []):
+            if s.get("type") == "think":
+                yield _sse("think", {"text": s.get("text", "")})
+            elif s.get("type") == "tool":
+                yield _sse("tool", {"id": s.get("id"), "name": s.get("name"), "input": s.get("input") or {}})
+                if s.get("output") is not None:
+                    yield _sse("tool_result", {"id": s.get("id"), "output": s.get("output"),
+                                               "is_error": bool(s.get("is_error"))})
         # mock/一次性结果按字推送，体验与 Claude Code 适配器一致
         for ch in reply:
             yield _sse("delta", {"text": ch})
             time.sleep(0.005)
-        yield _sse("done", {"reply": reply, "session_id": r.get("session_id"), "engine": r.get("engine")})
+        yield _sse("done", {"reply": reply, "session_id": r.get("session_id"), "engine": r.get("engine"),
+                            **({"usage": r["usage"]} if r.get("usage") else {}),
+                            **({"model": r["model"]} if r.get("model") else {})})
 
     return StreamingResponse(gen(), media_type="text/event-stream")
 

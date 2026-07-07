@@ -903,12 +903,76 @@ def build_system_prompt(cfg: dict) -> str:
     return "\n".join(parts)
 
 
+def _tool_result_text(content):
+    """tool_result 的 content（str 或块列表）→ 展示文本；图片块给占位符不丢步骤。"""
+    if isinstance(content, list):
+        parts = []
+        for b in content:
+            if not isinstance(b, dict):
+                continue
+            if b.get("type") == "text":
+                parts.append(b.get("text", ""))
+            elif b.get("type") == "image":
+                parts.append("[图片]")
+        return "\n".join(parts)
+    return str(content or "")
+
+
+def _steps_from_stream_lines(lines):
+    """从 Claude Code stream-json 行流提取执行链路 steps：
+    [{type:'think',text}] / [{type:'tool',id,name,input,output?,is_error?}] / [{type:'info',text}]，
+    与流式端 SSE 协议同构。"""
+    steps = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ev = json.loads(line)
+        except Exception:
+            continue
+        t = ev.get("type")
+        if t == "assistant":
+            for blk in ev.get("message", {}).get("content", []):
+                if blk.get("type") == "thinking" and blk.get("thinking"):
+                    steps.append({"type": "think", "text": blk["thinking"]})
+                elif blk.get("type") == "tool_use":
+                    steps.append({"type": "tool", "id": blk.get("id"), "name": blk.get("name"),
+                                  "input": blk.get("input") or {}})
+        elif t == "user":
+            for blk in (ev.get("message", {}).get("content") or []):
+                if isinstance(blk, dict) and blk.get("type") == "tool_result":
+                    for s in reversed(steps):
+                        if s.get("type") == "tool" and s.get("id") == blk.get("tool_use_id"):
+                            s["output"] = _tool_result_text(blk.get("content"))[:4000]
+                            s["is_error"] = bool(blk.get("is_error"))
+                            break
+        elif t == "system" and "compact" in str(ev.get("subtype") or ""):
+            steps.append({"type": "info", "text": "上下文已压缩"})
+    return steps
+
+
+def _turn_usage_of(ev):
+    """从 stream-json result 事件提取本轮用量/成本/耗时。"""
+    u = ev.get("usage") or {}
+    out = {k: u[k] for k in ("input_tokens", "output_tokens",
+                             "cache_read_input_tokens", "cache_creation_input_tokens") if k in u}
+    if ev.get("total_cost_usd") is not None:
+        out["cost_usd"] = ev["total_cost_usd"]
+    if ev.get("duration_ms") is not None:
+        out["duration_ms"] = ev["duration_ms"]
+    if ev.get("num_turns") is not None:
+        out["num_turns"] = ev["num_turns"]
+    return out or None
+
+
 def run_claude_code(system_prompt: str, message: str, model: str, session_id: Optional[str]):
-    """无头调用本机 Claude Code 真实运行。返回 {engine, reply, session_id?}。"""
+    """无头调用本机 Claude Code 真实运行。返回 {engine, reply, session_id?, steps?}。
+    用 stream-json 全量收集：除最终回复外，还原思考过程与工具调用链（调试面板展示）。"""
     b = claude_bin()
     if not b:
         return {"engine": "mock", "reply": None}
-    cmd = [b, "-p", message, "--output-format", "json"]
+    cmd = [b, "-p", message, "--output-format", "stream-json", "--verbose"]
     if session_id:
         cmd += ["--resume", session_id]            # 续接多轮上下文
     elif system_prompt:
@@ -925,12 +989,22 @@ def run_claude_code(system_prompt: str, message: str, model: str, session_id: Op
         return {"engine": "error", "reply": "调试超时（>180s）"}
     if res.returncode != 0:
         return {"engine": "error", "reply": (res.stderr or res.stdout or "claude 运行失败").strip()[:1000]}
-    out = (res.stdout or "").strip()
-    try:
-        data = json.loads(out)
-        return {"engine": "claude-code", "reply": data.get("result", ""), "session_id": data.get("session_id")}
-    except Exception:
-        return {"engine": "claude-code", "reply": out}
+    lines = (res.stdout or "").strip().splitlines()
+    steps = _steps_from_stream_lines(lines)
+    for line in reversed(lines):                    # result 事件在最后
+        try:
+            data = json.loads(line)
+        except Exception:
+            continue
+        if data.get("type") == "result":
+            usage = _turn_usage_of(data)
+            sub = data.get("subtype")
+            return {"engine": "claude-code", "reply": data.get("result", ""),
+                    "session_id": data.get("session_id"),
+                    **({"steps": steps} if steps else {}),
+                    **({"usage": usage} if usage else {}),
+                    **({"stop": sub} if sub and sub != "success" else {})}
+    return {"engine": "claude-code", "reply": (res.stdout or "").strip()}
 
 
 def run_openclaw_code(cfg: dict, message: str, session_id: Optional[str]):
@@ -1502,6 +1576,8 @@ def _session_stream_gen(user, sid, agent_ref, svc, payload, message):
     （user 消息已在外层先 append。）云端 agent 以一次性结果包成单个 delta+done。"""
     def gen():
         acc = ""
+        steps = []          # 执行链路（think/tool/info）：随流累积，轮末随 bot 消息落库 → 历史回放可见
+        turn_meta = {}      # usage/model/stop：done 事件携带，随 bot 消息落库
         new_tok = payload.get("session_id")
         err_text = None
         if svc.get("location") == "cloud":              # L2/L3 云端独立沙箱
@@ -1537,15 +1613,41 @@ def _session_stream_gen(user, sid, agent_ref, svc, payload, message):
                                 continue
                             if ev == "delta":
                                 acc += d.get("text", "")
+                            elif ev == "think":
+                                if steps and steps[-1].get("type") == "think" and not steps[-1].get("done"):
+                                    steps[-1]["text"] = (steps[-1].get("text") or "") + (d.get("text") or "")
+                                else:
+                                    steps.append({"type": "think", "text": d.get("text") or ""})
+                            elif ev == "tool":
+                                for s in steps:      # 工具启动即封口在途思考段，后续思考另起一段
+                                    if s.get("type") == "think":
+                                        s["done"] = True
+                                steps.append({"type": "tool", "id": d.get("id"), "name": d.get("name"),
+                                              "input": d.get("input")})
+                            elif ev == "tool_result":
+                                for s in reversed(steps):
+                                    if s.get("type") == "tool" and s.get("id") == d.get("id"):
+                                        s["output"] = d.get("output"); s["is_error"] = bool(d.get("is_error"))
+                                        break
+                            elif ev == "info":
+                                steps.append({"type": "info", "text": d.get("text") or ""})
                             elif ev == "done":
                                 acc = d.get("reply") or acc; new_tok = d.get("session_id") or new_tok
+                                for k in ("usage", "model", "stop"):
+                                    if d.get(k):
+                                        turn_meta[k] = d[k]
                             elif ev == "error":
                                 err_text = d.get("reply") or "出错"
             except Exception as e:
                 err_text = f"agent 服务不可达：{e}"
                 yield f"event: error\ndata: {json.dumps({'reply': err_text}, ensure_ascii=False)}\n\n"
         final = err_text or acc.strip() or "（无回复）"
-        _sess_append(user, sid, {"role": "bot", "text": final, **({"err": True} if err_text else {})})
+        for s in steps:
+            s.pop("done", None)                     # 内部标记不落库
+        _sess_append(user, sid, {"role": "bot", "text": final,
+                                 **({"steps": steps} if steps else {}),
+                                 **turn_meta,
+                                 **({"err": True} if err_text else {})})
         _sess_set_token(user, sid, new_tok)
     return gen
 

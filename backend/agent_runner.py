@@ -51,6 +51,35 @@ def _sse(event, data):
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def _result_text(content):
+    """tool_result 的 content（str 或块列表）→ 展示文本；图片块给占位符不丢步骤。"""
+    if isinstance(content, list):
+        parts = []
+        for b in content:
+            if not isinstance(b, dict):
+                continue
+            if b.get("type") == "text":
+                parts.append(b.get("text", ""))
+            elif b.get("type") == "image":
+                parts.append("[图片]")
+        return "\n".join(parts)
+    return str(content or "")
+
+
+def _turn_usage(ev):
+    """从 stream-json 的 result 事件提取本轮用量/成本/耗时（调试面板展示）。"""
+    u = ev.get("usage") or {}
+    out = {k: u[k] for k in ("input_tokens", "output_tokens",
+                             "cache_read_input_tokens", "cache_creation_input_tokens") if k in u}
+    if ev.get("total_cost_usd") is not None:
+        out["cost_usd"] = ev["total_cost_usd"]
+    if ev.get("duration_ms") is not None:
+        out["duration_ms"] = ev["duration_ms"]
+    if ev.get("num_turns") is not None:
+        out["num_turns"] = ev["num_turns"]
+    return out or None
+
+
 _LOGIN_HINT = ("⚠️ 运行环境的 Claude Code 未登录。请在**启动后端的终端**执行 `claude` 并 `/login`"
                "（或设置 ANTHROPIC_API_KEY），然后重启后端 / 重新发布该 Agent。")
 
@@ -113,6 +142,7 @@ def cc_stream(message, session_id):
     proc = subprocess.Popen(cmd, cwd=DIR, env=env, stdin=subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
     got_partial = False
+    got_think = False     # 已经流过 thinking 增量：assistant 消息里的整块 thinking 不再重发
     err_emitted = False   # 已发过 error（如未登录）：不再重复抛 finally 的「运行失败」
     try:
         for line in proc.stdout:
@@ -133,22 +163,43 @@ def cc_stream(message, session_id):
                             continue
                         got_partial = True
                         yield _sse("delta", {"text": delta["text"]})
+                    elif delta.get("type") == "thinking_delta" and delta.get("thinking"):
+                        got_think = True
+                        yield _sse("think", {"text": delta["thinking"]})
             elif t == "assistant":
                 for blk in ev.get("message", {}).get("content", []):
                     if blk.get("type") == "text" and blk.get("text") and not got_partial:
                         if _auth_hint(blk["text"]):
                             continue
                         yield _sse("delta", {"text": blk["text"]})
+                    elif blk.get("type") == "thinking" and blk.get("thinking") and not got_think:
+                        yield _sse("think", {"text": blk["thinking"]})
                     elif blk.get("type") == "tool_use":
-                        yield _sse("tool", {"name": blk.get("name")})
+                        yield _sse("tool", {"id": blk.get("id"), "name": blk.get("name"),
+                                            "input": blk.get("input") or {}})
+            elif t == "user":
+                # 工具执行结果以 user 消息里的 tool_result 块回流 → 转发给前端串起调用链
+                for blk in (ev.get("message", {}).get("content") or []):
+                    if isinstance(blk, dict) and blk.get("type") == "tool_result":
+                        yield _sse("tool_result", {"id": blk.get("tool_use_id"),
+                                                   "output": _result_text(blk.get("content"))[:4000],
+                                                   "is_error": bool(blk.get("is_error"))})
+            elif t == "system":
+                # 上下文压缩等系统事件 → info 标记（链路里显示分隔说明）
+                if "compact" in str(ev.get("subtype") or ""):
+                    yield _sse("info", {"text": "上下文已压缩"})
             elif t == "result":
                 got_partial = False
                 if ev.get("is_error") and (hint := _auth_hint(ev.get("result", ""))):
                     err_emitted = True
                     yield _sse("error", {"reply": hint})
                 else:
+                    usage = _turn_usage(ev)
+                    sub = ev.get("subtype")
                     yield _sse("done", {"reply": ev.get("result", ""),
-                                        "session_id": ev.get("session_id"), "engine": "claude-code"})
+                                        "session_id": ev.get("session_id"), "engine": "claude-code",
+                                        **({"usage": usage} if usage else {}),
+                                        **({"stop": sub} if sub and sub != "success" else {})})
     finally:
         proc.wait()
         if proc.returncode not in (0, None) and not err_emitted:
