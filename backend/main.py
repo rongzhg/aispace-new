@@ -2440,6 +2440,10 @@ def deployment_create(body: DeploymentIn, x_user: Optional[str] = Header(None, a
     if not body.agentId or not (body.name or "").strip():
         raise HTTPException(400, "任务名与 Agent 必填")
     a = get_agent(body.agentId)                                   # 不存在会抛 404
+    # 硬规则：只能给**已发布** Agent 建定时任务（运行环境/版本都来自发布）。未发布 → 先去发布。
+    with db() as c:
+        if not c.execute("SELECT 1 FROM published WHERE agent_id=?", (body.agentId,)).fetchone():
+            raise HTTPException(400, f"「{a.get('name') or body.agentId}」尚未发布，请先发布该 Agent 再为它创建定时任务")
     st = body.scheduleType or "manual"
     if st == "cron":
         if not body.cronExpr:

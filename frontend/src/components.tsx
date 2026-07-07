@@ -2170,7 +2170,8 @@ export function SchedulePanel({ agents, onOpenSession }) {
   React.useEffect(() => { if (!hist) return; loadRuns(hist.dep); const t = setInterval(() => loadRuns(hist.dep), 5000); return () => clearInterval(t); }, [hist && hist.dep.id]);
 
   const dmAgent = dm && (agents || []).find(a => a.id === dm.agentId);
-  const openNew = () => setDm({ name: '', agentId: (agents || [])[0] && agents[0].id, versionPolicy: 'latest', prompt: '', scheduleType: 'cron', preset: '0 9 * * *', cronExpr: '0 9 * * *', runAt: null });
+  const pubAgents = (agents || []).filter(a => a.published);   // 只有已发布 Agent 能建定时任务（环境/版本都来自发布）
+  const openNew = () => setDm({ name: '', agentId: pubAgents[0] && pubAgents[0].id, versionPolicy: 'latest', prompt: '', scheduleType: 'cron', preset: '0 9 * * *', cronExpr: '0 9 * * *', runAt: null });
   const openEdit = d => setDm({ id: d.id, name: d.name, agentId: d.agentId, versionPolicy: d.versionPolicy, prompt: d.prompt, scheduleType: d.scheduleType, preset: CRON_PRESETS.some(p => p.value === d.cronExpr) ? d.cronExpr : '__custom', cronExpr: d.cronExpr || '', runAt: d.runAt });
   const save = async () => {
     if (!dm.name || !dm.name.trim()) { antMsg.warning('请填任务名'); return; }
@@ -2206,7 +2207,9 @@ export function SchedulePanel({ agents, onOpenSession }) {
           <div style={{ fontSize: 22, fontWeight: 760, letterSpacing: -0.2, color: '#0F172A', lineHeight: 1.15 }}>定时任务</div>
           <div style={{ marginTop: 5, color: '#64748B', fontSize: 12.5 }}>把 Agent 配置成按计划自动运行的任务：到点触发（或手动「立即运行」）都会产生一次运行与对应会话，全程可回看。</div>
         </div>
-        <Button type="primary" icon={<PlusOutlined />} disabled={!API_ON || (agents || []).length === 0} onClick={openNew}>新建定时任务</Button>
+        <Tooltip title={API_ON && pubAgents.length === 0 ? '需先发布至少一个 Agent，才能为它建定时任务' : ''}>
+          <Button type="primary" icon={<PlusOutlined />} disabled={!API_ON || pubAgents.length === 0} onClick={openNew}>新建定时任务</Button>
+        </Tooltip>
       </div>
       {!API_ON ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未连后端 · 定时任务需先在本机启动后端" />
         : loading && total === 0 ? <div style={{ padding: '48px 0', textAlign: 'center' }}><Spin /></div>
@@ -2214,8 +2217,12 @@ export function SchedulePanel({ agents, onOpenSession }) {
         ? <div style={{ border: '1px dashed #DFE3EA', borderRadius: 6, padding: '32px 24px', background: '#F8FAFC', textAlign: 'center' }}>
             <ClockCircleOutlined style={{ fontSize: 26, color: '#94A3B8', marginBottom: 10 }} />
             <div style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 6 }}>还没有定时任务</div>
-            <div style={{ fontSize: 12.5, color: '#64748B', marginBottom: 16 }}>三步：① 选 Agent 和版本 ② 写任务指令 ③ 定计划（每天 / 每周 / cron），到点自动运行</div>
-            <Button type="primary" icon={<PlusOutlined />} disabled={(agents || []).length === 0} onClick={openNew}>新建定时任务</Button>
+            <div style={{ fontSize: 12.5, color: '#64748B', marginBottom: 16 }}>{pubAgents.length === 0
+              ? '定时任务只能建在已发布的 Agent 上。请先去「Agent」发布一个，再回来创建。'
+              : '三步：① 选已发布的 Agent + 版本 ② 写任务指令 ③ 定计划（每天 / 每周 / cron），到点自动运行'}</div>
+            <Tooltip title={pubAgents.length === 0 ? '需先发布至少一个 Agent' : ''}>
+              <Button type="primary" icon={<PlusOutlined />} disabled={pubAgents.length === 0} onClick={openNew}>新建定时任务</Button>
+            </Tooltip>
           </div>
         : (<>
           {/* 工具栏 · 规范 §04/§05：搜索 + 过滤横排，右侧计数与刷新 */}
@@ -2280,9 +2287,9 @@ export function SchedulePanel({ agents, onOpenSession }) {
             <Input value={dm.name} placeholder="如：每日竞品简报" maxLength={40} onChange={e => setDm(v => ({ ...v, name: e.target.value }))} /></div>
           <div style={{ display: 'flex', gap: 10 }}>
             <div style={{ flex: 1 }}><div style={{ fontSize: 12.5, color: '#64748B', fontWeight: 650, marginBottom: 6 }}>Agent</div>
-              <Select value={dm.agentId} style={{ width: '100%' }} placeholder="选择 Agent" disabled={!!dm.id}
+              <Select value={dm.agentId} style={{ width: '100%' }} placeholder="选择已发布的 Agent" disabled={!!dm.id}
                 onChange={id => setDm(v => ({ ...v, agentId: id, versionPolicy: 'latest' }))}
-                options={(agents || []).map(a => ({ value: a.id, label: `${a.name}（${fwName(a.framework)}）` }))} /></div>
+                options={pubAgents.map(a => ({ value: a.id, label: `${a.name}（${fwName(a.framework)}）` }))} /></div>
             <div style={{ width: 170 }}><div style={{ fontSize: 12.5, color: '#64748B', fontWeight: 650, marginBottom: 6 }}>版本<span style={{ color: '#94A3B8', fontWeight: 400 }}>（运行时解析）</span></div>
               <Select value={dm.versionPolicy} style={{ width: '100%' }} onChange={vp => setDm(v => ({ ...v, versionPolicy: vp }))}
                 options={[{ value: 'latest', label: '跟随最新' },
@@ -2294,7 +2301,7 @@ export function SchedulePanel({ agents, onOpenSession }) {
             <div style={{ padding: '7px 11px', border: '1px solid #E2E8F0', borderRadius: 6, background: '#F8FAFC', fontSize: 12.5, color: '#475569', display: 'flex', alignItems: 'center', gap: 8 }}>
               {dmAgent && dmAgent.publishedIsolation
                 ? <>复用发布环境 {_neuPill(`${dmAgent.publishedIsolation} · ${isoName(dmAgent.publishedIsolation)}`)}</>
-                : <span style={{ color: '#94A3B8' }}>该 Agent 尚未发布，运行时默认用 共享 L1</span>}
+                : <span style={{ color: '#94A3B8' }}>选择 Agent 后显示其发布环境</span>}
             </div>
             <div style={{ marginTop: 5, fontSize: 11.5, color: '#94A3B8' }}>运行环境在发布 Agent 时选择，定时任务直接复用，无需在此重复配置。</div></div>
           <div><div style={{ fontSize: 12.5, color: '#64748B', fontWeight: 650, marginBottom: 6 }}>调度</div>

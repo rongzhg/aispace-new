@@ -37,10 +37,12 @@ def system_md():
 - 用户切换空间，这个标记会随之改变；若某条消息没有该标记，沿用最近一次给定的空间，没有则先问用户。
 
 ## 你的能力来源
-- **平台操作工具（MCP `aispace`）**：列出/创建 Agent、发布、列出已发布、列出/创建空间、列技能等。
+- **平台操作工具（MCP `aispace`）**：列出/创建 Agent、发布、列出已发布、列出/创建空间、列技能；
+  以及**定时任务**：列出(list_deployments)、看运行历史(list_deployment_runs)、新建(create_deployment)、
+  立即运行(run_deployment)、启停(set_deployment_enabled)、删除(delete_deployment)。
   能用工具核实或执行的事，**先调工具**，不要凭空回答或假设结果。
-- **内置技能（skill）**：`agent-creator`（建 Agent）、`skill-creator`（写技能草稿）、
-  `requirement-clarify`（需求澄清）。相关场景按技能说明执行。
+- **内置技能（skill）**：`agent-creator`（建 Agent）、`schedule-creator`（建定时任务）、
+  `skill-creator`（写技能草稿）、`requirement-clarify`（需求澄清）。相关场景按技能说明执行。
 - 平台全局 / 用户安装的技能 / MCP 会自动出现，与内置集一并可用。
 
 ## 工作准则
@@ -78,6 +80,35 @@ BUILTIN_SKILLS = [
 ## 注意
 - workspace_id 用当前空间，除非用户指定别的空间。
 - 不要在没有名称时就创建；名称缺失就先问。
+""",
+    },
+    {
+        "name": "schedule-creator",
+        "description": "当用户想让某个 Agent 按计划自动运行（定时任务 / 每天/每周跑一次 / 定时执行）时使用：澄清哪个 Agent、干什么、什么频率，然后真正创建定时任务。",
+        "instructions": """# Schedule Creator · 建定时任务
+
+把用户「让某 Agent 按计划自动干某事」的诉求，变成一个建好的定时任务。
+
+## 前提：Agent 必须已发布
+定时任务只能建在**已发布**的 Agent 上（运行环境/版本都来自发布）。
+- 先用 `list_deployments` 或 `list_agents` 确认目标 Agent 是否已发布。
+- 若未发布：**不要**尝试创建，直接提示用户「先去发布该 Agent，再回来建定时任务」（可顺带问要不要现在帮他发布——调 `publish_agent`）。
+
+## 步骤
+1. **澄清三要素**（缺哪问哪，最多两轮）：
+   - 哪个 Agent（用 list_agents/list_deployments 核对名字→id；确认已发布）
+   - 任务名 + 干什么（这句话会作为每次运行发给 Agent 的开场指令 prompt；可用 {{date}}/{{time}}/{{task}} 变量）
+   - 什么频率：周期(cron) / 某个具体时刻一次(once) / 只手动(manual)
+2. **把自然语言频率翻成 cron 表达式**（5 字段：分 时 日 月 周）：
+   每天9点=`0 9 * * *`；每小时整点=`0 * * * *`；每周一9点=`0 9 * * 1`；每月1号9点=`0 9 1 * *`；工作日8:30=`30 8 * * 1-5`。
+   拿不准就把你理解的时间复述给用户确认。
+3. 调 `create_deployment(agent_id, name, prompt, schedule_type, cron_expr/run_at)` 创建。
+   运行环境、版本策略都不用传（默认复用发布环境 + 跟随最新）。
+4. 回报：任务名 + 调度摘要 + 下次运行时间，并提示「可在『定时任务』里管理，或让我立即跑一次(run_deployment)」。
+
+## 注意
+- 创建失败提示「未发布」时，转到「前提」那步引导发布，别硬试。
+- 一次只建一个任务；用户要多个就逐个确认。
 """,
     },
     {

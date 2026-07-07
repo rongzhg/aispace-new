@@ -16,8 +16,8 @@ description: Chat 统一入口——会话轨、默认通用 agent、slash 唤�
 
 | 角色 | 说明 |
 |---|---|
-| 通用 agent（默认） | 编排者，用对话**直接执行平台操作**（列出/创建 Agent、创建空间、查已发布…）；也能调用 skill |
-| 内置 skill（slash 唤起） | `/agent-creator`（创建 Agent）、`/skill-creator`（生成技能草稿）；可扩展 |
+| 通用 agent（默认） | 编排者，用对话**直接执行平台操作**（列出/创建 Agent、创建空间、查已发布、管定时任务…）；也能调用 skill |
+| 内置 skill（slash 唤起） | `/agent-creator`（创建 Agent）、`/schedule-creator`（建定时任务）、`/skill-creator`（生成技能草稿）；可扩展 |
 
 > 设计与分阶段见 ../../技术文档/架构设计.md（阶段二：需求追问→EARS spec；阶段三：完整工具调用 + 派发 vibe-coding agent）。
 
@@ -33,7 +33,7 @@ description: Chat 统一入口——会话轨、默认通用 agent、slash 唤�
 4. WHERE Chat 主对话区为空 系统 SHALL 展示高信号空状态（标题「从一个明确动作开始」+ 说明）与四条可点击建议（填入输入框），而不是只展示大面积空白
 5. WHERE 后端可用且通用 Agent 开启 系统 SHALL **默认**连接后端常驻通用 Agent（开关默认开）；后端不可用或用户关闭开关时，系统 MAY 回退为前端轻量意图匹配
 6. ✅已确认：Chat 标题旁 SHALL 展示通用 Agent 连接态徽标——「已连接 / 待启动」（轮询 `/api/copilot/status`，4s 一次）或「未连后端」；并提供「通用 Agent」开关（带说明 tooltip）
-7. WHEN 用户输入 `/` THEN 系统 SHALL 弹出内置 skill 菜单（`/agent-creator`、`/skill-creator`，按输入子串过滤），点击或输入完整命令即进入该 skill；未知 `/` 命令 SHALL 提示可用命令
+7. WHEN 用户输入 `/` THEN 系统 SHALL 弹出内置 skill 菜单（`/agent-creator`、`/schedule-creator`、`/skill-creator`，按输入子串过滤），点击或输入完整命令即进入该 skill；未知 `/` 命令 SHALL 提示可用命令
 8. WHERE 处于某 skill 系统 SHALL 显示当前技能 chip 并提供「× 退出」回到通用 agent
 9. WHERE skill 菜单由注册表（`CHAT_SKILLS`）驱动 系统 SHALL 支持后续扩展（内置/用户 skill 自动出现）
 
@@ -101,11 +101,11 @@ description: Chat 统一入口——会话轨、默认通用 agent、slash 唤�
 
 #### Acceptance Criteria
 1. WHERE 每个用户 系统 SHALL 提供一个常驻「通用助手」（copilot），跑在该用户的 L0 沙箱里、**跨其所有空间复用**；按**用户身份**路由，「当前空间」作每请求上下文（前端经 `?ws=` 透传；见 架构设计 §10.5）
-2. WHEN 用户与通用助手对话 THEN 系统 SHALL 经其 **platform-ops MCP** 真正执行平台操作（列出/创建/发布 Agent、创建空间等），结果实时反映；前端在每轮结束后调 `onChanged()` 刷新相关列表
+2. WHEN 用户与通用助手对话 THEN 系统 SHALL 经其 **platform-ops MCP** 真正执行平台操作（列出/创建/发布 Agent、创建空间，以及**定时任务**的列出/运行历史/新建/立即运行/启停/删除等），结果实时反映；前端在每轮结束后调 `onChanged()` 刷新相关列表
 3. ✅已确认：前端走 **SSE 流式**（`POST /api/copilot/chat/stream`，事件 `delta`/`done`/`error`），逐字增量更新最后一条 bot 气泡；首条消息会懒启动服务，故首 token 前可能有数秒空窗，期间气泡显示「通用 Agent 思考中…」（Spin）；`error` 事件气泡转红显示错误文案
 4. ✅已确认：会话历史由**后端每轮原子落库**（copilot 路径）；仅「轻量模式（关掉开关）」的消息由前端兜底 `PUT /api/copilot/sessions/{id}` 保存。会话首条用户消息前 24 字自动作标题
 5. WHERE 单 agent 编排 系统 SHALL 支持挂载 **skill**（`.claude/skills/`）与 **MCP**（`.mcp.json`）两个扩展点，且 copilot 与用户 agent 复用同一套绑定
-6. WHERE 出厂内置 系统 SHALL 自带 `agent-creator`、`skill-creator`、`requirement-clarify` 三个 skill，并与用户从市场安装的 skill/MCP 合并
+6. WHERE 出厂内置 系统 SHALL 自带 `agent-creator`、`schedule-creator`、`skill-creator`、`requirement-clarify` 四个 skill，并与用户从市场安装的 skill/MCP 合并
 7. WHEN 用户提平台改进/反馈类需求 THEN 系统 SHALL 进入 `requirement-clarify` 多轮追问收敛成 EARS，确认后调 `submit_requirement` 落地
 8. WHERE 需求落地 系统 SHALL 用可插拔 sink：demo 写文件（FileSink），配置 webhook 后发往外部系统（HttpSink）
 

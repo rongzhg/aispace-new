@@ -55,6 +55,14 @@ def _post(path, body=None):
     return _http("POST", path, body or {})
 
 
+def _patch(path, body=None):
+    return _http("PATCH", path, body or {})
+
+
+def _delete(path):
+    return _http("DELETE", path)
+
+
 # ---------------- 工具实现（纯函数，返回 Python 对象）----------------
 def t_list_workspaces():
     return [{"id": w["id"], "name": w["name"]} for w in _get("/api/workspaces")]
@@ -125,6 +133,71 @@ def t_submit_requirement(title, body_markdown, workspace_id=""):
     return {"ok": True, "sink": "file", "path": path}
 
 
+# ---------------- 定时任务（Deployment）----------------
+def t_list_deployments(workspace_id=""):
+    """列出定时任务：名称、Agent、调度、下次运行、上次运行结果、启用态。"""
+    d = _get(f"/api/deployments?ws={workspace_id}" if workspace_id else "/api/deployments")
+    out = []
+    for x in (d.get("items") or []):
+        lr = x.get("lastRun") or {}
+        out.append({"id": x["id"], "name": x["name"], "agentId": x["agentId"], "agentName": x.get("agentName"),
+                    "schedule": _sched_text(x), "isolation": x.get("isolation"),
+                    "enabled": x.get("enabled"), "nextRunAt": x.get("nextRunAt"),
+                    "lastRun": {"status": lr.get("status"), "at": lr.get("startedAt")} if lr else None})
+    return out
+
+
+def _sched_text(x):
+    st = x.get("scheduleType")
+    if st == "cron":
+        return f"cron {x.get('cronExpr')}"
+    if st == "once":
+        return f"一次性 {x.get('runAt')}"
+    return "仅手动"
+
+
+def t_list_runs(deployment_id):
+    """列出某定时任务的历次运行：状态、触发方式、解析版本、起止、结果/错误摘要、会话 id。"""
+    rs = _get(f"/api/deployments/{deployment_id}/runs")
+    return [{"status": r["status"], "trigger": r.get("trigger"), "version": r.get("version"),
+             "startedAt": r.get("startedAt"), "finishedAt": r.get("finishedAt"),
+             "sessionId": r.get("sessionId"), "summary": r.get("summary"), "error": r.get("error")}
+            for r in (rs or [])]
+
+
+def t_create_deployment(agent_id, name, prompt, schedule_type="cron", cron_expr="", run_at=""):
+    """新建定时任务。运行环境复用该 Agent 的发布设置、版本默认跟随最新——都不用传。
+    schedule_type: cron(需 cron_expr) / once(需 run_at) / manual。"""
+    body = {"agentId": agent_id, "name": name, "prompt": prompt, "versionPolicy": "latest",
+            "scheduleType": schedule_type}
+    if schedule_type == "cron":
+        body["cronExpr"] = cron_expr
+    elif schedule_type == "once":
+        body["runAt"] = run_at
+    d = _post("/api/deployments", body)
+    return {"id": d["id"], "name": d["name"], "agentName": d.get("agentName"),
+            "schedule": _sched_text(d), "nextRunAt": d.get("nextRunAt"),
+            "isolation": d.get("isolation"), "isolationPublished": d.get("isolationPublished")}
+
+
+def t_run_deployment(deployment_id):
+    """立即手动运行一次某定时任务（异步执行）。稍后用 list_runs 看结果。"""
+    _post(f"/api/deployments/{deployment_id}/run")
+    return {"ok": True, "note": "已触发，正在运行；用 list_runs 查看结果"}
+
+
+def t_set_deployment_enabled(deployment_id, enabled):
+    """启用或停用某定时任务的自动调度。"""
+    d = _patch(f"/api/deployments/{deployment_id}", {"enabled": bool(enabled)})
+    return {"id": d["id"], "name": d["name"], "enabled": d.get("enabled"), "nextRunAt": d.get("nextRunAt")}
+
+
+def t_delete_deployment(deployment_id):
+    """删除某定时任务模板（破坏性；历史运行台账与会话保留）。删除前请与用户确认。"""
+    _delete(f"/api/deployments/{deployment_id}")
+    return {"ok": True}
+
+
 # ---------------- 工具注册表（name → schema + handler）----------------
 _OBJ = lambda props, required: {"type": "object", "properties": props, "required": required}
 _STR = {"type": "string"}
@@ -150,6 +223,33 @@ TOOLS = [
     {"name": "submit_requirement", "description": "提交一份澄清完成的需求（EARS 正文）。demo 写收件箱文件，配置 webhook 后发外部系统。",
      "inputSchema": _OBJ({"title": _STR, "body_markdown": _STR, "workspace_id": _STR}, ["title", "body_markdown"]),
      "fn": lambda a: t_submit_requirement(a["title"], a["body_markdown"], a.get("workspace_id", ""))},
+    # ---- 定时任务（Deployment）----
+    {"name": "list_deployments", "description": "列出定时任务（含 Agent、调度、下次运行、上次运行结果、启用态）。不传 workspace_id 则列全部。",
+     "inputSchema": _OBJ({"workspace_id": _STR}, []),
+     "fn": lambda a: t_list_deployments(a.get("workspace_id", ""))},
+    {"name": "list_deployment_runs", "description": "列出某定时任务的历次运行（状态/触发/版本/耗时/结果或错误/会话 id），用于排查跑得怎么样、为什么失败。",
+     "inputSchema": _OBJ({"deployment_id": _STR}, ["deployment_id"]),
+     "fn": lambda a: t_list_runs(a["deployment_id"])},
+    {"name": "create_deployment",
+     "description": ("为一个**已发布**的 Agent 创建定时任务。未发布会失败——先让用户去发布该 Agent。"
+                    "运行环境复用该 Agent 发布设置、版本默认跟随最新，都不用传。"
+                    "schedule_type: cron(周期,需 cron_expr) / once(一次性,需 run_at 形如 2026-07-10 09:00) / manual(仅手动)。"
+                    "cron_expr 是 5 字段(分 时 日 月 周)，由你把用户的自然语言频率翻译过来，例："
+                    "每天9点=`0 9 * * *`；每小时=`0 * * * *`；每周一9点=`0 9 * * 1`；每月1号9点=`0 9 1 * *`；工作日8:30=`30 8 * * 1-5`。"),
+     "inputSchema": _OBJ({"agent_id": _STR, "name": _STR, "prompt": _STR,
+                          "schedule_type": {**_STR, "default": "cron"}, "cron_expr": _STR, "run_at": _STR},
+                         ["agent_id", "name", "prompt"]),
+     "fn": lambda a: t_create_deployment(a["agent_id"], a["name"], a["prompt"],
+                                         a.get("schedule_type", "cron"), a.get("cron_expr", ""), a.get("run_at", ""))},
+    {"name": "run_deployment", "description": "立即手动触发某定时任务运行一次（异步）。稍后用 list_deployment_runs 看结果。",
+     "inputSchema": _OBJ({"deployment_id": _STR}, ["deployment_id"]),
+     "fn": lambda a: t_run_deployment(a["deployment_id"])},
+    {"name": "set_deployment_enabled", "description": "启用或停用某定时任务的自动调度。",
+     "inputSchema": _OBJ({"deployment_id": _STR, "enabled": {"type": "boolean"}}, ["deployment_id", "enabled"]),
+     "fn": lambda a: t_set_deployment_enabled(a["deployment_id"], a["enabled"])},
+    {"name": "delete_deployment", "description": "删除某定时任务（破坏性；历史运行台账与会话保留）。执行前先与用户确认。",
+     "inputSchema": _OBJ({"deployment_id": _STR}, ["deployment_id"]),
+     "fn": lambda a: t_delete_deployment(a["deployment_id"])},
 ]
 _BY_NAME = {t["name"]: t for t in TOOLS}
 
