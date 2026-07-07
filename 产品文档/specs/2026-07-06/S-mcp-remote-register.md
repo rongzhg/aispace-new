@@ -1,8 +1,8 @@
 ---
 name: MCP 远程注册与运行时接入（表单/JSON · 发布范围 · 接口探测 · Agent 接 MCP）
 last amended: 2026-07-06
-version: 1
-description: MCP 注册升级为远程优先（Streamable HTTP / SSE，表单+JSON 两种录入，禁本地 stdio）、发布范围可选（公开/本空间）、详情页实时探测接口、列表按视觉规范重做为高密度行式；并打通 Claude Code 与 OpenClaw 两个运行时真正连上所绑 MCP——今日增量，作用于 D(MCP 工具)、并落到 I/M 的运行时物化
+version: 2
+description: MCP 注册升级为远程优先（**仅 Streamable HTTP，禁 SSE**，禁本地 stdio；表单+JSON 两种录入）、发布范围可选（公开/本空间）、详情页实时探测接口、列表按视觉规范重做为高密度行式；并打通 Claude Code 与 OpenClaw 两个运行时真正连上所绑 MCP——今日增量，作用于 D(MCP 工具)、并落到 I/M 的运行时物化
 ---
 
 # MCP 远程注册与运行时接入 Feature Specification（2026-07-06 增量）
@@ -13,39 +13,41 @@ description: MCP 注册升级为远程优先（Streamable HTTP / SSE，表单+JS
 
 ## 定位
 
-MCP 的真实使用形态正在从「本机起子进程(stdio)」转向「连远程 HTTP/SSE 服务」（Aone 开放市场、Zetta、灵境等平台直接给出 Streamable HTTP / SSE 地址）。本增量让平台**以远程为一等公民**：录入即填地址+请求头，注册前后可实时探测其暴露的接口，绑定到 Agent 后**两个运行时（Claude Code / OpenClaw）都能真正连上并调用**。
+MCP 的真实使用形态正在从「本机起子进程(stdio)」转向「连远程 HTTP 服务」（Aone 开放市场、Zetta、灵境等平台直接给出 Streamable HTTP 地址）。本增量让平台**以远程为一等公民**：录入即填地址+请求头，注册前后可实时探测其暴露的接口，绑定到 Agent 后**两个运行时（Claude Code / OpenClaw）都能真正连上并调用**。
+
+> **注册仅支持 Streamable HTTP（`transport=http`）**：SSE 型 MCP Server **不支持注册**（表单不提供 SSE 选项、JSON 含 `type:"sse"` 报 422）。数据模型/运行时仍保留 `sse` 分支仅为**存量兼容**（老库里可能存在的 sse 行不炸），但不能再新注册。
 
 | 概念 | 说明 |
 |---|---|
-| 远程 MCP | 经 HTTP 连接的 MCP Server：`transport=http`(Streamable HTTP) 或 `sse`，用 `url` + 可选 `headers` 接入；对应 Claude Code `.mcp.json` 的 `{type,url,headers}` 与 OpenClaw `mcp.servers` 的 `{url,transport,headers}` |
+| 远程 MCP | 经 HTTP 连接的 MCP Server，**注册仅 `transport=http`(Streamable HTTP)**（`sse` 仅存量兼容，不可新注册），用 `url` + 可选 `headers` 接入；对应 Claude Code `.mcp.json` 的 `{type:"http",url,headers}` 与 OpenClaw `mcp.servers` 的 `{url,transport:"streamable-http",headers}` |
 | 发布范围 | 注册时选：`公开`(scope=platform，全平台可引用) / `仅本项目空间`(scope=workspace，仅本空间可见) |
 | 接口探测 | 对已注册的远程 MCP 发 `initialize`+`tools/list`，列出它暴露的工具接口（名称/描述/入参 schema） |
 
 ## MODIFIED Requirements
 
-### Requirement: MCP 注册（远程优先 · 表单/JSON · 发布范围） 🔸MVP（已实现）
-> 修订 D-mcp-tools「MCP 页面」AC3/AC4：注册对象由「本地命令(stdio)」改为「远程 MCP（Streamable HTTP / SSE）」，表单删除「分类」「主页/文档」，新增「请求头」与「发布范围」，并提供「JSON 直接粘贴」通道。**不再支持通过注册界面新增 stdio 本地命令型 MCP**（既有平台内置 stdio 项如 platform-ops 仍可展示/使用）。
+### Requirement: MCP 注册（仅 Streamable HTTP · 表单/JSON · 发布范围） 🔸MVP（已实现）
+> 修订 D-mcp-tools「MCP 页面」AC3/AC4：注册对象由「本地命令(stdio)」改为「远程 MCP（**仅 Streamable HTTP**）」，表单删除「分类」「主页/文档」，新增「请求头」与「发布范围」，并提供「JSON 直接粘贴」通道。**注册不支持 SSE、也不再支持 stdio 本地命令型 MCP**（既有平台内置 stdio 项如 platform-ops 仍可展示/使用；老库里可能存在的 sse 行仍可展示/运行，仅不可新注册）。
 
 **User Story:** 作为项目成员，我希望把一个远程 MCP Server（填地址+请求头，或直接粘它的标准 mcpServers JSON）注册进平台，并选择公开或仅本空间可见，以便 Agent 能选用它。
 
 #### Acceptance Criteria
-1. WHERE 注册弹窗 系统 SHALL 提供「表单 / JSON」两种录入方式（Segmented 切换），并在顶部提示「可接入 Aone 开放市场、Zetta、灵境 等平台上的 MCP Server —— 复制其 Streamable HTTP / SSE 地址即可注册」
-2. WHEN 用户用**表单**方式 THEN 系统 SHALL 采集：服务器类型（`Streamable HTTP` / `SSE` 二选一）、服务器名称（必填）、用途简介、服务器地址（必填 url）、请求头 Header（可选，键值对，可逐条增删），**不再采集分类与主页/文档**
+1. WHERE 注册弹窗 系统 SHALL 提供「表单 / JSON」两种录入方式（Segmented 切换），并在顶部提示可接入 Aone 开放市场 / Zetta / 灵境 等平台上的 MCP Server（复制其 Streamable HTTP 地址即可注册）
+2. WHEN 用户用**表单**方式 THEN 系统 SHALL 采集：服务器类型（**仅 `Streamable HTTP` 一种，不提供 SSE**）、服务器名称（必填）、用途简介、服务器地址（必填 url）、请求头 Header（可选，键值对，可逐条增删），**不再采集分类与主页/文档**
 3. WHEN 用户用 **JSON** 方式 THEN 系统 SHALL 接受标准 mcpServers 配置（`{"mcpServers":{name:{...}}}`、裸 `{name:{...}}` 映射、或单个 server 对象三种形态），一次可注册多个 server；`POST /api/market/mcp/register-json`
-4. IF 表单类型或 JSON 中出现**本地命令(stdio)**型 server（缺 url / 仅有 command）THEN 系统 SHALL 拒绝并报 422「仅支持注册远程 MCP（Streamable HTTP / SSE），不支持本地命令(stdio)」
+4. IF 表单或 JSON 中出现 **SSE 型** server（`type:"sse"`）THEN 系统 SHALL 拒绝并报 422「注册暂不支持 SSE 模式的 MCP Server，仅支持 Streamable HTTP」；IF 出现**本地命令(stdio)**型（缺 url / 仅有 command）THEN 系统 SHALL 拒绝并报 422「仅支持注册远程 MCP（Streamable HTTP），不支持本地命令(stdio)」
 5. WHERE 注册弹窗底部 系统 SHALL 提供「发布范围」选择：`仅本项目空间`（默认，scope=workspace，`POST /api/market/mcp/register[-json]?ws=`）/ `公开（全平台可见）`（scope=platform，`POST /api/platform/mcp/register[-json]`）；选公开时确认按钮文案变为「公开发布」
 6. WHEN 注册成功 THEN 系统 SHALL 关闭弹窗、刷新列表，并 toast 提示注册/公开发布的数量或名称；该 MCP 随即在（本空间或全平台）Agent 工具选择中可见可选
-7. WHERE installed_mcp 系统 SHALL 以 `transport('http'|'sse'|'stdio')` + `url` + `headers(json)` 承载远程接入信息（加列不改主键，向后兼容旧库）
+7. WHERE installed_mcp 系统 SHALL 以 `transport('http'|'sse'|'stdio')` + `url` + `headers(json)` 承载接入信息（加列不改主键，向后兼容旧库）；**新注册只会写入 `http`**，`sse`/`stdio` 仅为存量/平台内置项的读兼容
 
 #### 引用 / 影响
 - 术语：MCP, Tool, Workspace, Scope(platform/workspace)
-- 组件：`McpMarket`（页面）、注册 `Modal`（Segmented 表单/JSON、Segmented 类型、Header 键值增删、Segmented 发布范围）、`Field`、`Input`、`antMsg`
+- 组件：`McpMarket`（页面）、注册 `Modal`（Segmented 表单/JSON、服务器类型段**仅 Streamable HTTP 一项**、Header 键值增删、Segmented 发布范围）、`Field`、`Input`、`antMsg`
 - 端点：`POST /api/market/mcp/register?ws=`、`POST /api/market/mcp/register-json?ws=`、`POST /api/platform/mcp/register`、`POST /api/platform/mcp/register-json`
 - 数据字段（新增）：`transport, url, headers`
 - 现有功能：修订 D「MCP 页面」；发布范围复用 H/scope 的 platform/workspace 模型
 
 #### 待确认 / 假设
-- 已定：注册界面只收远程（http/sse）；stdio 仅保留平台内置项的展示/运行，不再经界面新增
+- 已定：**注册只收 Streamable HTTP（http）**；SSE 不支持注册（存量 sse 行仅读兼容）；stdio 仅保留平台内置项的展示/运行，不再经界面新增
 - 已定：请求头值直接入库（远程连接所需）；与 stdio 的 env「仅存变量名、运行时 `${VAR}` 展开」口径不同
 - ⬜后续：公开发布的管理员门控（demo 不强校验，UI 侧门控）；OAuth 型远程 MCP 的授权托管
 
@@ -117,8 +119,8 @@ MCP 的真实使用形态正在从「本机起子进程(stdio)」转向「连远
 > 详细实现锚点见 ../../技术文档/市场实现-技能与MCP.md、../../技术文档/openclaw对接.md。
 
 1. **数据模型**：`installed_mcp` 加 `transport/url/headers`（`init_db` 的 ALTER 列表，向后兼容）。
-2. **注册**：`McpRegisterIn` 加 `transport/url/headers`；`McpRegisterJsonIn(config,name,desc,category)`；`_validate_mcp_register` 拒 stdio；`_parse_mcp_config` 解析三形态并拒 stdio；四个端点 `market/platform × register/register-json`。
+2. **注册（仅 Streamable HTTP）**：`McpRegisterIn` 加 `transport/url/headers`；`McpRegisterJsonIn(config,name,desc,category)`；`_validate_mcp_register` 与 `_parse_mcp_config` 均**拒 `sse`（422）与 stdio（422）**，只放行 `http`；四个端点 `market/platform × register/register-json`。
 3. **探测**：`_probe_mcp_tools(url,headers)`（urllib 手写 `initialize`+`tools/list`，兼容 json/SSE 帧）；`POST /api/tools/{id}/probe?ws=`。
 4. **物化**：Claude Code 走 `_materialize_mcp`（远程 `{type,url,headers}`）；OpenClaw 走 `_openclaw_mcp_servers` → 绑定 payload `mcp` → gateway `sync_global_mcp`（`openclaw mcp set/unset/reload`）。
-5. **前端**：`McpMarket` 行式列表 + `McpRow`；注册 `Modal` 双模式(表单/JSON)+类型(http/sse)+Header 增删+发布范围；`McpDetailModal` 探测状态机；`AssetDrawer` 远程显示类型。
+5. **前端**：`McpMarket` 行式列表 + `McpRow`；注册 `Modal` 双模式(表单/JSON)+类型段仅 Streamable HTTP+Header 增删+发布范围；`McpDetailModal` 探测状态机；`AssetDrawer` 远程显示类型。
 6. **公开验证服务器**（免鉴权 Streamable HTTP，可直接注册+探测）：DeepWiki `https://mcp.deepwiki.com/mcp`、Microsoft Learn `https://learn.microsoft.com/api/mcp`、Context7 `https://mcp.context7.com/mcp`、Hugging Face `https://huggingface.co/mcp`。

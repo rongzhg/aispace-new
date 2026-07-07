@@ -9,7 +9,7 @@ description: 工具选择抽屉、MCP 页面（注册/卡片/平台全局空间�
 
 > 术语见 ../glossary.md；格式见 ../spec-template.md
 > 状态：✅已确认 / 🔸MVP / ⬜后续 / ❓待确认
-> **2026-07-06 增量（Spec [S](./2026-07-06/S-mcp-remote-register.md)）**：注册升级为**远程优先**（Streamable HTTP / SSE，表单+JSON 双录入，禁 stdio）、新增**发布范围**（公开/本空间）与详情页**实时接口探测**、列表改**高密度行式**，并补齐下文长期 ⬜（连通性校验/拉工具清单、导出 `.mcp.json`）+ 打通 Claude Code/OpenClaw 运行时接 MCP。本文以下若干 AC（尤其「MCP 页面」AC2/3/4、「自定义工具接入」）以 S 为准。
+> **2026-07-06 增量（Spec [S](./2026-07-06/S-mcp-remote-register.md)）**：注册升级为**远程优先·仅 Streamable HTTP**（**禁 SSE**、禁 stdio；表单+JSON 双录入）、新增**发布范围**（公开/本空间）与详情页**实时接口探测**、列表改**高密度行式**，并补齐下文长期 ⬜（连通性校验/拉工具清单、导出 `.mcp.json`）+ 打通 Claude Code/OpenClaw 运行时接 MCP。本文以下若干 AC（尤其「MCP 页面」AC2/3/4、「自定义工具接入」）以 S 为准。
 
 ## MODIFIED Requirements
 

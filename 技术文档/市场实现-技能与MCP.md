@@ -43,7 +43,7 @@ installed_mcp   (ws_id, id, name, summary, category, command, args(json), env(js
                  -- scope: 'platform'(公开·全平台) | 'workspace'(本空间私有)；加列不改主键, 老库 ALTER 平滑迁移
 ```
 
-> **2026-07-06 增量（Spec S）**：注册升级为**远程优先**——注册界面只收 Streamable HTTP / SSE（禁 stdio），`installed_mcp` 加 `transport/url/headers` 三列。stdio 仅保留平台内置项（如 platform-ops）的展示与运行。见 [Agent 运行时接 MCP](#agent-运行时接-mcpclaude-code--openclaw2026-07-06) 与 openclaw对接.md。
+> **2026-07-06 增量（Spec S）**：注册升级为**远程优先·仅 Streamable HTTP**——注册界面只收 Streamable HTTP（**禁 SSE、禁 stdio**），`installed_mcp` 加 `transport/url/headers` 三列。sse/stdio 仅为存量兼容与平台内置项（如 platform-ops）的展示与运行，不可新注册。见 [Agent 运行时接 MCP](#agent-运行时接-mcpclaude-code--openclaw2026-07-06) 与 openclaw对接.md。
 - **技能 = 一个 SKILL.md**（Claude Agent Skill 规格，见 platform.claude.com 文档）：
   - `name`：必填，正则 `^[a-z0-9-]{1,64}$` 且不含 `anthropic`/`claude`（`_validate_skill_name`，违反报 422）。**技能 id 就是 name**（name 本身即合法 slug、也是命令名 `/name`）。
   - `description`：必填、≤1024，写清“做什么 + 何时使用”——它是 Claude 判断是否调用该技能的依据。
@@ -74,8 +74,8 @@ installed_mcp   (ws_id, id, name, summary, category, command, args(json), env(js
 | DELETE | `/api/skills/{slug}?ws=` | **软删除**（标记 deleted=1，保留行与存档） |
 | GET | `/api/market/mcp?q=&category=` | MCP 市场目录（全平台共享）；`{items, categories}`（保留备用，UI 不再调用） |
 | POST | `/api/market/mcp/{id}/install?ws=` | 把目录项加入当前空间（保留备用） |
-| POST | `/api/market/mcp/register?ws=` | 表单注册**远程 MCP** 到当前空间（body: `name/desc/transport('http'\|'sse')/url/headers{}`；stdio 报 422） |
-| POST | `/api/market/mcp/register-json?ws=` | 粘贴标准 mcpServers JSON 注册到当前空间（body: `config{}/name/desc`；一次可多个 server；stdio 报 422） |
+| POST | `/api/market/mcp/register?ws=` | 表单注册**远程 MCP** 到当前空间（body: `name/desc/transport('http')/url/headers{}`；**SSE 报 422、stdio 报 422**） |
+| POST | `/api/market/mcp/register-json?ws=` | 粘贴标准 mcpServers JSON 注册到当前空间（body: `config{}/name/desc`；一次可多个 server；**含 `type:"sse"` 报 422、stdio 报 422**） |
 | POST | `/api/platform/mcp/register` | **公开发布**（scope=platform，全平台可见）表单注册；body 同 register，无 ws |
 | POST | `/api/platform/mcp/register-json` | 公开发布·JSON 注册；body 同 register-json，无 ws |
 | POST | `/api/tools/{id}/probe?ws=` | **探测远程 MCP 接口**：连该 MCP 做 `initialize`+`tools/list`，返回 `{tools:[{name,description,input_schema}]}`；非 http/sse 报 422，连不上报 502 |
@@ -83,7 +83,7 @@ installed_mcp   (ws_id, id, name, summary, category, command, args(json), env(js
 | DELETE | `/api/tools/{id}?ws=` | 从当前空间移出（本空间私有；平台全局项只能禁用/启用） |
 
 > **2026-07-06 增量（Spec S）**：`McpRegisterIn` 加 `transport/url/headers`；新增 `McpRegisterJsonIn{config,name,desc,category}`。
-> 校验：`_validate_mcp_register` 拒 stdio（仅 http/sse，url 必填）；`_parse_mcp_config` 解析三形态（`{mcpServers:{}}`/裸映射/单 server 对象）并拒 stdio。
+> 校验：`_validate_mcp_register` **拒 sse 与 stdio（均 422），只放行 http**（url 必填）；`_parse_mcp_config` 解析三形态（`{mcpServers:{}}`/裸映射/单 server 对象）后同样**拒 sse 与 stdio**。
 > 探测：`_probe_mcp_tools(url,headers)` 用 urllib 手写 JSON-RPC，兼容 `application/json` 与 `text/event-stream` 两种响应帧。
 
 > 注意：`/api/tools`、`/api/skills` 现返回**指定空间的已启用项**；前端把它们与内置 mock 清单合并展示。
@@ -96,8 +96,8 @@ installed_mcp   (ws_id, id, name, summary, category, command, args(json), env(js
   - **技能市场**：顶部「新建技能」按钮 → `Modal` 内放 `Upload.Dragger`（`customRequest` 用 `fetch`+`FormData` 调 `/upload?ws=`，非 `apiCall`，因后者是 JSON）；已注册技能以 `MarketCard`（`installed`）卡片网格展示：主操作「详情」占宽，「删除」退化为小图标（`compactRemove`=有 onView 时；danger text 图标）+ `Popconfirm` 软删除确认；卡片含 `info` 行显示创建人（`creator`）与创建时间（`added_at`）。无 clawhub 浏览区。创建人由 `App → Market(me) → SkillMarket` 透传当前用户（demo 为 `u0` "Helena（我）"）。
   - 技能详情 `SkillTreePage`（**独立页面**，非 Modal，SkillMarket 内 `detail` 状态切换 + 返回按钮）：`buildTree()` 把扁平 `tree` 转成嵌套，用 antd `Tree.DirectoryTree` 渲染目录树，点文件 → `/skills/{id}/file` 取内容显示在浅色 `<pre>`。
   - `AssetDrawer`（Agent 技能选择）技能侧只用后端已注册技能，不再混入内置 mock `SKILLS`。
-  - **MCP 市场（2026-07-06 Spec S 重做）**：顶部「注册 MCP」→ Modal，Segmented 切「表单 / JSON」两种录入，均**只收远程**（http/sse）：
-    - 表单：Segmented 服务器类型（`Streamable HTTP`/`SSE`）+ 名称 + 简介 + 地址 + **请求头 Header 键值增删**；无分类/主页。
+  - **MCP 市场（2026-07-06 Spec S 重做）**：顶部「注册 MCP」→ Modal，Segmented 切「表单 / JSON」两种录入，均**只收 Streamable HTTP**（禁 SSE、禁 stdio）：
+    - 表单：服务器类型段**仅 `Streamable HTTP` 一项**（不提供 SSE）+ 名称 + 简介 + 地址 + **请求头 Header 键值增删**；无分类/主页。
     - JSON：粘贴标准 mcpServers 配置（`submitReg` 前端 `JSON.parse` 后 `POST …/register-json`）。
     - 底部 Segmented「发布范围」：`仅本项目空间`(→`market/mcp/register[-json]?ws=`) / `公开（全平台可见）`(→`platform/mcp/register[-json]`)；选公开时确认按钮变「公开发布」。
     - 顶部提示来源：可接入 Aone 开放市场 / Zetta / 灵境 上的 MCP Server。

@@ -12,7 +12,7 @@
 | P | [P-conversation-shell.md](./P-conversation-shell.md) | 会话轨重做（小号新建 / 整行卡片 / hover 操作 / 可收起）、左侧主导航可收起、QA 消息时间展示 | L(Chat)、I(Playground)、应用外壳(§03/§07) |
 | Q | [Q-debug-trace.md](./Q-debug-trace.md) | 调试执行链路（思考 / 工具链 / MCP 徽标 / 子代理 / 图片占位 / 压缩标记）+ 每轮用量脚注 + **AI 回复 Markdown 渲染**；三处统一、两 runtime 统一协议、流式+历史回放 | I(试跑/调试)、L(通用助手) |
 | R | [R-session-detail-ime.md](./R-session-detail-ime.md) | Session 明细页对齐 Chat/Playground 展示（Markdown 正文 + 执行链路 + 用量脚注，只读回放）+ 对话 Composer 输入法组合守卫（拼音未完不误发） | N(Session 控制台)、L(Chat)、I(Playground 调试) |
-| S | [S-mcp-remote-register.md](./S-mcp-remote-register.md) | MCP 注册升级为**远程优先**（Streamable HTTP / SSE，表单+JSON 双录入，禁 stdio）+ **发布范围**（公开/本空间）+ 详情页**实时接口探测**（initialize+tools/list）+ 列表按视觉规范重做为**高密度行式**；并打通 **Claude Code 与 OpenClaw 两个运行时真正接 MCP**（Claude Code `.mcp.json` / OpenClaw 全局 `mcp.servers` 同步） | D(MCP 工具)、I/M(运行时物化)、H/scope(发布范围) |
+| S | [S-mcp-remote-register.md](./S-mcp-remote-register.md) | MCP 注册升级为**远程优先·仅 Streamable HTTP**（**禁 SSE**、禁 stdio；表单+JSON 双录入）+ **发布范围**（公开/本空间）+ 详情页**实时接口探测**（initialize+tools/list）+ 列表按视觉规范重做为**高密度行式**；并打通 **Claude Code 与 OpenClaw 两个运行时真正接 MCP**（Claude Code `.mcp.json` / OpenClaw 全局 `mcp.servers` 同步） | D(MCP 工具)、I/M(运行时物化)、H/scope(发布范围) |
 
 > 说明：Q 的「AI 回复 Markdown 渲染」与 R 为当日晚间（20:00 后）增量；R 的两块对应主 spec N-session-console(v3) 与 L-assistant(v5, AC10) 的细化。S 为当日晚间增量，把 D-mcp-tools 从 stdio 口径升级为远程优先，并补齐其长期 ⬜（连通性校验/拉工具清单、导出 `.mcp.json`）。
 
@@ -62,7 +62,7 @@
 ### MCP 远程注册与接入（模块 S，[S-mcp-remote-register.md](./S-mcp-remote-register.md)）
 | 新能力 | Requirement | 关联主 spec |
 |---|---|---|
-| 注册远程 MCP（表单类型 http/sse + 地址 + Header；或粘 JSON），禁 stdio | MCP 注册（远程优先 · 表单/JSON · 发布范围） | D(MCP 页面) |
+| 注册远程 MCP（表单类型**仅 Streamable HTTP** + 地址 + Header；或粘 JSON），**禁 SSE**、禁 stdio | MCP 注册（仅 Streamable HTTP · 表单/JSON · 发布范围） | D(MCP 页面) |
 | 发布范围：公开（全平台）/ 仅本项目空间 | 同上（AC5） | H/scope |
 | 详情页实时探测接口（initialize+tools/list，按需触发，优雅降级） | MCP 详情与接口探测 | D(自定义工具接入) |
 | MCP 列表改高密度行式（类型/范围语义标签、行 hover） | MCP 列表视觉重做（高密度行式） | D(MCP 页面)、视觉规范 |
