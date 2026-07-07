@@ -5,3 +5,10 @@ httpx==0.27.2
 python-multipart==0.0.20  # 技能市场上传技能包（multipart/form-data）
 # 注：mcp_server.py（通用 agent 的平台工具）已改为纯标准库实现，不再依赖 mcp 包，
 # 任意 python3（含 3.8/3.9）即可运行，无需额外安装。
+
+# 云端运行（L2/L3 阿里云 AgentRun）——cloud_adapter.py 的控制面 SDK。
+# 仅云端发布需要；本地/纯 demo 缺这些也能跑（import 被 try/except 兜底，L2/L3 显示“云端运行不可用”）。
+# ⚠️ 部署到会走云端发布的环境（如杭州 ECS）时务必安装，否则 L2/L3 发布报 No module named 'alibabacloud_agentrun20250910'。
+alibabacloud_agentrun20250910==5.7.5
+alibabacloud_tea_openapi==0.4.4
+alibabacloud_tea_util==0.3.14
